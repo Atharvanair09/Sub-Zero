@@ -1,7 +1,9 @@
 import React from 'react';
 import { LayoutDashboard, CreditCard, PieChart, Zap, Settings, HelpCircle, Scan, ChevronRight } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLoginClick }) => {
+  const { user, isSignedIn } = useUser();
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'subscriptions', icon: CreditCard, label: 'Subscriptions' },
@@ -9,6 +11,12 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
     { id: 'automation', icon: Zap, label: 'Automation' },
     { id: 'settings', icon: Settings, label: 'Settings' },
   ];
+
+  const handleProfileClick = () => {
+    if (!isSignedIn && onLoginClick) {
+      onLoginClick();
+    }
+  };
 
   return (
     <aside className="sidebar">
@@ -53,18 +61,26 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
           <span>Help Center</span>
         </button>
 
-        <div className="user-profile">
-          <img
-            src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alex"
-            alt="User avatar"
-            className="avatar"
-          />
+        <div 
+          className={`user-profile ${!isSignedIn ? 'clickable' : ''}`} 
+          onClick={handleProfileClick}
+        >
+          <div className="avatar-container">
+            <img
+              src={isSignedIn ? user?.imageUrl : "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest"}
+              alt="User avatar"
+              className="avatar"
+            />
+            {isSignedIn && <div className="status-indicator online" />}
+          </div>
           <div className="user-info">
-            <p className="user-name">Alex Rivera</p>
-            <p className="user-plan">Pro Plan</p>
+            <p className="user-name">{isSignedIn ? user?.fullName : "Guest User"}</p>
+            <p className="user-plan">{isSignedIn ? "Pro Plan" : "Sign in to sync"}</p>
           </div>
         </div>
       </div>
+
+
 
       <style>{`
         .sidebar {
@@ -204,6 +220,18 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
           gap: 0.75rem;
           padding-top: 1.5rem;
           border-top: 1px solid var(--border);
+          transition: all 0.2s ease;
+        }
+
+        .user-profile.clickable:hover {
+          cursor: pointer;
+          opacity: 0.8;
+          transform: translateY(-1px);
+        }
+
+        .avatar-container {
+          position: relative;
+          display: flex;
         }
 
         .avatar {
@@ -211,17 +239,36 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
           height: 40px;
           border-radius: 50%;
           background: #f1f5f9;
+          object-fit: cover;
+          border: 2px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .status-indicator {
+          position: absolute;
+          bottom: 2px;
+          right: 2px;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          border: 2px solid white;
+        }
+
+        .status-indicator.online {
+          background: #10b981;
         }
 
         .user-name {
           font-size: 0.9rem;
           font-weight: 600;
           color: var(--text-main);
+          margin: 0;
         }
 
         .user-plan {
           font-size: 0.75rem;
           color: var(--text-muted);
+          margin: 0;
         }
       `}</style>
     </aside>

@@ -13,16 +13,42 @@ const data = [
 ];
 
 const Dashboard = () => {
+  const [subscriptions, setSubscriptions] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchSubscriptions = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/subscriptions');
+        const data = await response.json();
+        setSubscriptions(data);
+        setLoading(false);
+      } catch (err) {
+        console.error(err);
+        setLoading(false);
+      }
+    };
+    fetchSubscriptions();
+  }, []);
+
+  const totalMonthlySpend = subscriptions.reduce((sum, sub) => sum + sub.price, 0);
+  const potentialSavings = subscriptions
+    .filter(sub => !sub.usedRecently)
+    .reduce((sum, sub) => sum + sub.price, 0);
+  const optimizationPaths = subscriptions.filter(sub => !sub.usedRecently).length;
+
+  if (loading) return <div className="loading">Loading insights...</div>;
+
   return (
     <div className="dashboard fade-in">
       <div className="stat-grid">
         <div className="stat-card">
           <div className="stat-info">
             <p>Total Monthly Spend</p>
-            <h3>$1,248.50</h3>
+            <h3>${totalMonthlySpend.toFixed(2)}</h3>
             <span className="trend positive">
               <TrendingUp size={14} />
-              +12.4% from last month
+              Synced across {subscriptions.length} services
             </span>
           </div>
           <div className="stat-visual">
@@ -33,10 +59,10 @@ const Dashboard = () => {
         <div className="stat-card">
           <div className="stat-info">
             <p>AI Identified Savings</p>
-            <h3 className="highlight">$342.15</h3>
+            <h3 className="highlight">${potentialSavings.toFixed(2)}</h3>
             <span className="trend positive">
               <Zap size={14} fill="currentColor" />
-              4 optimization paths ready
+              {optimizationPaths} optimization paths ready
             </span>
           </div>
           <div className="stat-visual">
@@ -47,14 +73,20 @@ const Dashboard = () => {
         <div className="stat-card">
           <div className="stat-info">
             <p>Active Subscriptions</p>
-            <h3>24</h3>
+            <h3>{subscriptions.length}</h3>
             <span className="trend">
-              2 renewing this week
+              Monitoring in real-time
             </span>
           </div>
           <div className="stat-visual">
             <div className="grid-placeholder">
-              {[...Array(9)].map((_, i) => <div key={i} className="dot" />)}
+              {[...Array(9)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className="dot" 
+                  style={{ background: i < subscriptions.length ? '#6366f1' : '#e2e8f0' }} 
+                />
+              ))}
             </div>
           </div>
         </div>

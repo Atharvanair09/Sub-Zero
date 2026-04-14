@@ -4,9 +4,12 @@ import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import Subscriptions from './pages/Subscriptions';
 import Activity from './pages/Activity';
+import Login from './pages/Login';
+import { SignedIn, SignedOut } from '@clerk/clerk-react';
 
-function App() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showLogin, setShowLogin] = useState(false);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -23,13 +26,21 @@ function App() {
 
   return (
     <div className="app-container">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onLoginClick={() => setShowLogin(true)} 
+      />
       <main className="main-content">
-        <Header activeTab={activeTab} />
+        <Header activeTab={activeTab} onLoginClick={() => setShowLogin(true)} />
         <div className="content-area">
           {renderContent()}
         </div>
       </main>
+
+      <SignedOut>
+        {showLogin && <Login onClose={() => setShowLogin(false)} />}
+      </SignedOut>
 
       <style>{`
         .content-area {
@@ -52,4 +63,12 @@ function App() {
   );
 }
 
+function App() {
+  return (
+    <AppContent />
+  );
+}
+
 export default App;
+
+

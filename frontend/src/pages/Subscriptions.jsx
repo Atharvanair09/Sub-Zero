@@ -1,58 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, Zap, ShieldAlert, Check, X, ArrowRight, ExternalLink } from 'lucide-react';
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, Cell } from 'recharts';
-
-const subscriptions = [
-  {
-    id: 1,
-    name: 'Netflix',
-    logo: 'https://www.cdnlogo.com/logos/n/11/netflix.svg',
-    price: 19.99,
-    plan: 'PREMIUM 4K',
-    nextBill: 'Oct 24',
-    status: 'Active Status',
-    lastActivity: '2 days ago',
-    alert: null,
-    color: '#E50914'
-  },
-  {
-    id: 2,
-    name: 'Adobe CC',
-    logo: 'https://www.cdnlogo.com/logos/a/82/adobe-creative-cloud.svg',
-    price: 54.99,
-    plan: 'UNUSED',
-    nextBill: 'Oct 21',
-    status: 'Idle - Alert',
-    lastActivity: 'No activity in last 28 days',
-    alert: 'UNUSED WARNING',
-    potentialSavings: '$650/year',
-    color: '#FA0F00'
-  },
-  {
-    id: 3,
-    name: 'Spotify',
-    logo: 'https://www.cdnlogo.com/logos/s/17/spotify.svg',
-    price: 16.99,
-    plan: 'FAMILY PLAN',
-    nextBill: 'Nov 02',
-    status: 'Active Status',
-    lastActivity: 'Today via "Alex\'s iPhone"',
-    alert: null,
-    color: '#1DB954'
-  },
-  {
-    id: 4,
-    name: 'Dropbox',
-    logo: 'https://www.cdnlogo.com/logos/d/15/dropbox.svg',
-    price: 11.99,
-    plan: 'PLUS 2TB',
-    nextBill: 'Oct 30',
-    status: 'Active Status',
-    lastActivity: '6 days ago',
-    alert: null,
-    color: '#0061FF'
-  }
-];
 
 const forecastData = [
   { value: 100 }, { value: 200 }, { value: 150 }, { value: 300 }, 
@@ -60,6 +8,71 @@ const forecastData = [
 ];
 
 const Subscriptions = () => {
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchSubscriptions = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('http://localhost:5000/api/subscriptions');
+      const data = await response.json();
+      setSubscriptions(data);
+      setLoading(false);
+    } catch (err) {
+      console.error("Fetch error:", err);
+      setError("Failed to load subscriptions");
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, []);
+
+  const handleUsageToggle = async (id, usedRecently) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/subscriptions/usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, usedRecently })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSubscriptions(prev => prev.map(sub => sub.id === id ? { ...sub, usedRecently } : sub));
+      }
+    } catch (err) {
+      console.error("Usage toggle error:", err);
+    }
+  };
+
+  const handleCancel = async (id, name) => {
+    if (window.confirm(`Are you sure you want to cancel ${name}?`)) {
+      try {
+        const response = await fetch('http://localhost:5000/api/subscriptions/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert(`Successfully cancelled ${name}`);
+          setSubscriptions(prev => prev.filter(sub => sub.id !== id));
+        }
+      } catch (err) {
+        console.error("Cancel error:", err);
+      }
+    }
+  };
+
+  const totalMonthlySpend = subscriptions.reduce((sum, sub) => sum + sub.price, 0);
+  const potentialSavings = subscriptions
+    .filter(sub => !sub.usedRecently)
+    .reduce((sum, sub) => sum + sub.price, 0);
+
+  if (loading) return <div className="loading">Analyzing your portfolio...</div>;
+  if (error) return <div className="error">{error}</div>;
+
   return (
     <div className="subscriptions fade-in">
       <div className="page-header">
@@ -67,17 +80,19 @@ const Subscriptions = () => {
         <h1>Your Subscriptions</h1>
         <div className="summary-row">
           <div className="analysis-text">
-            AI Analysis: You have <span>12 active services</span> totaling <span>$184.50/mo</span>.
-            We've identified 3 unused platforms that could save you $42.00 monthly.
+            AI Analysis: You have <span>{subscriptions.length} active services</span> totaling <span>${totalMonthlySpend.toFixed(2)}/mo</span>.
+            {potentialSavings > 0 && (
+              <> We've identified unused platforms that could save you <span>${potentialSavings.toFixed(2)} monthly</span>.</>
+            )}
           </div>
           <div className="summary-stats">
             <div className="mini-stat">
               <p>Monthly Spend</p>
-              <h3>$184.50</h3>
+              <h3>${totalMonthlySpend.toFixed(2)}</h3>
             </div>
             <div className="mini-stat">
               <p>Potential Savings</p>
-              <h3 className="highlight">$42.00</h3>
+              <h3 className="highlight">${potentialSavings.toFixed(2)}</h3>
             </div>
           </div>
         </div>
@@ -86,7 +101,7 @@ const Subscriptions = () => {
       <div className="subscription-grid">
         {subscriptions.map((sub) => (
           <div className="sub-card card" key={sub.id}>
-            {sub.alert && <div className="unused-warning">{sub.alert}</div>}
+            {!sub.usedRecently && <div className="unused-warning">AI: SUGGEST CANCELLING</div>}
             <div className="sub-top">
               <div className="sub-branding">
                 <div className="sub-logo" style={{ background: '#f8fafc' }}>
@@ -110,26 +125,55 @@ const Subscriptions = () => {
             <div className="usage-section">
               <p className="section-label">USED RECENTLY?</p>
               <div className="usage-status">
-                <p className={sub.alert ? 'text-danger' : 'text-muted'}>
-                  {sub.lastActivity}
-                  {sub.potentialSavings && <span className="savings-hint">. Save {sub.potentialSavings}.</span>}
-                </p>
+                <div className="usage-info">
+                  <p className={!sub.usedRecently ? 'text-danger' : 'text-muted'}>
+                    {sub.lastActivity}
+                  </p>
+                  {!sub.usedRecently && (
+                    <p className="ai-insight">
+                      <Zap size={12} fill="#ef4444" color="#ef4444" />
+                      <span>Low usage detected. Cancel to save ${sub.price}.</span>
+                    </p>
+                  )}
+                </div>
                 <div className="binary-buttons">
-                  <button className="btn-small active">YES</button>
-                  <button className="btn-small">NO</button>
+                  <button 
+                    className={`btn-small ${sub.usedRecently ? 'active' : ''}`}
+                    onClick={() => handleUsageToggle(sub.id, true)}
+                  >
+                    YES
+                  </button>
+                  <button 
+                    className={`btn-small ${!sub.usedRecently ? 'active-no' : ''}`}
+                    onClick={() => handleUsageToggle(sub.id, false)}
+                  >
+                    NO
+                  </button>
                 </div>
               </div>
             </div>
 
             <div className="sub-footer">
               <div className="status-row">
-                <div className={`status-dot ${sub.alert ? 'warning' : 'active'}`} />
+                <div className={`status-dot ${!sub.usedRecently ? 'warning' : 'active'}`} />
                 <span>{sub.status}</span>
               </div>
-              <button className={`cancel-btn ${sub.alert ? 'danger' : ''}`}>CANCEL SUBSCRIPTION</button>
+              <button 
+                className={`cancel-btn ${!sub.usedRecently ? 'danger' : ''}`}
+                onClick={() => handleCancel(sub.id, sub.name)}
+              >
+                CANCEL SUBSCRIPTION
+              </button>
             </div>
           </div>
         ))}
+        {subscriptions.length === 0 && (
+          <div className="empty-state card">
+            <Check size={48} color="#10b981" />
+            <h3>No more subscriptions!</h3>
+            <p>You've optimized your portfolio successfully.</p>
+          </div>
+        )}
       </div>
 
       <div className="forecast-section">
@@ -377,6 +421,45 @@ const Subscriptions = () => {
         .btn-small.active {
           background: #eff6ff;
           color: #3b82f6;
+        }
+
+        .btn-small.active-no {
+          background: #fef2f2;
+          color: #ef4444;
+          border-color: #fee2e2;
+        }
+
+        .ai-insight {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          font-size: 0.7rem;
+          font-weight: 600;
+          color: #ef4444;
+          margin-top: 0.4rem;
+        }
+
+        .empty-state {
+          grid-column: 1 / -1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 4rem;
+          text-align: center;
+          gap: 1rem;
+          background: white;
+        }
+
+        .empty-state h3 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          margin: 0;
+        }
+
+        .empty-state p {
+          color: var(--text-muted);
+          margin: 0;
         }
 
         .sub-footer {

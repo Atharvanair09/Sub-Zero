@@ -49,6 +49,19 @@ const optimizationActions = [
 ];
 
 const Activity = () => {
+  const [subscriptions, setSubscriptions] = React.useState([]);
+
+  React.useEffect(() => {
+    fetch('http://localhost:5000/api/subscriptions')
+      .then(res => res.json())
+      .then(data => setSubscriptions(data))
+      .catch(err => console.error(err));
+  }, []);
+
+  const potentialSavings = subscriptions
+    .filter(sub => !sub.usedRecently)
+    .reduce((sum, sub) => sum + sub.price, 0);
+
   return (
     <div className="activity-page fade-in">
       <div className="page-header">
@@ -57,12 +70,12 @@ const Activity = () => {
 
         <div className="header-chips">
           <div className="summary-pill blue">
-            <span>MONTHLY SAVED</span>
-            <strong>$412.50</strong>
+            <span>POTENTIAL SAVINGS</span>
+            <strong>${potentialSavings.toFixed(2)}</strong>
           </div>
           <div className="summary-pill purple">
-            <span>ACTIVE TRIALS</span>
-            <strong>3</strong>
+            <span>ACTIVE SERVICES</span>
+            <strong>{subscriptions.length}</strong>
           </div>
         </div>
       </div>
