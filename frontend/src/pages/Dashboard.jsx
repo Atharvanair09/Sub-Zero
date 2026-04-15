@@ -1,6 +1,8 @@
 import React from 'react';
 import { BarChart, Bar, Cell, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Legend } from 'recharts';
-import { MousePointer2, TrendingUp, DollarSign, Wallet, ShieldCheck, ArrowRight, ShieldAlert, Zap, CreditCard, Utensils, Target } from 'lucide-react';
+import { MousePointer2, TrendingUp, DollarSign, Wallet, ShieldCheck, ArrowRight, ShieldAlert, Zap, CreditCard, Utensils, Target, Clock, ShoppingCart } from 'lucide-react';
+import SavingsSimulator from '../components/SavingsSimulator';
+import BudgetTracker from '../components/BudgetTracker';
 
 const data = [
   { name: 'MON', value: 400 },
@@ -20,10 +22,14 @@ const Dashboard = ({ userId }) => {
     totalSubs: 0,
     totalTxns: 0,
     foodSpend: 0,
+    shoppingSpend: 0,
+    transportSpend: 0,
     subPercent: 0,
     healthScore: 100,
-    monthlyBudget: 0
+    monthlyBudget: 0,
+    categoryBudgets: { food: 2000, shopping: 3000, transport: 1000 }
   });
+  const [insights, setInsights] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -33,9 +39,17 @@ const Dashboard = ({ userId }) => {
         return;
       }
       try {
-        const response = await fetch(`http://localhost:5000/api/dashboard/stats?userId=${userId}`);
-        const data = await response.json();
-        setStats(data);
+        const [statsRes, insightsRes] = await Promise.all([
+          fetch(`http://localhost:5000/api/dashboard/stats?userId=${userId}`),
+          fetch(`http://localhost:5000/api/insights/patterns?userId=${userId}`)
+        ]);
+        const statsData = await statsRes.json();
+        const insightsData = await insightsRes.json();
+        
+        setStats(statsData);
+        if (insightsData.success) {
+          setInsights(insightsData.insights);
+        }
         setLoading(false);
       } catch (err) {
         console.error(err);
@@ -109,6 +123,28 @@ const Dashboard = ({ userId }) => {
             <button className="secondary-btn">Set Budget</button>
           </div>
 
+          <div className="behavior-cards">
+            {insights.map((insight, idx) => (
+              <div key={idx} className={`behavior-pill ${insight.type}`}>
+                <div className="pill-head">
+                  <div className="pill-icon">
+                    {insight.type === 'food' && <Utensils size={14} />}
+                    {insight.type === 'behavioral' && <Clock size={14} />}
+                    {insight.type === 'shopping' && <ShoppingCart size={14} />}
+                  </div>
+                  <span>{insight.title}</span>
+                </div>
+                <p>{insight.message}</p>
+              </div>
+            ))}
+            {insights.length === 0 && (
+              <div className="behavior-pill empty">
+                <ShieldCheck size={14} />
+                <span>Scanning behavior for savings...</span>
+              </div>
+            )}
+          </div>
+
           <div className="confidence-score">
             <p>SUBSCRIPTION HEALTH</p>
             <div className="score-header">
@@ -170,6 +206,14 @@ const Dashboard = ({ userId }) => {
             <p className="health-desc">
               {stats.healthScore < 50 ? 'Multiple wasteful subscriptions detected.' : stats.healthScore < 80 ? 'Some optimization recommended.' : 'You have an optimized portfolio!'}
             </p>
+          </div>
+
+          <div style={{ marginTop: '1.5rem' }}>
+            <BudgetTracker stats={stats} />
+          </div>
+
+          <div style={{ marginTop: '1.5rem' }}>
+            <SavingsSimulator />
           </div>
         </div>
       </div>
@@ -506,6 +550,50 @@ const Dashboard = ({ userId }) => {
           font-weight: 700;
           font-size: 0.8rem;
           box-shadow: var(--shadow-lg);
+        }
+
+        .behavior-cards {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 1rem;
+          margin-top: 1rem;
+        }
+
+        .behavior-pill {
+          background: white;
+          border: 1px solid var(--border);
+          padding: 1rem;
+          border-radius: 1rem;
+          transition: transform 0.2s;
+        }
+        .behavior-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+        
+        .pill-head {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 0.5rem;
+        }
+        .pill-head span { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
+        
+        .pill-icon {
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .food .pill-icon { background: #fee2e2; color: #ef4444; }
+        .behavioral .pill-icon { background: #fef3c7; color: #f59e0b; }
+        .shopping .pill-icon { background: #dcfce7; color: #10b981; }
+        .empty .pill-icon { background: #f1f5f9; color: #94a3b8; }
+        
+        .behavior-pill p { font-size: 0.75rem; font-weight: 600; line-height: 1.4; color: #334155; margin: 0; }
+        
+        @media (max-width: 768px) {
+          .behavior-cards { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>

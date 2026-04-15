@@ -168,7 +168,9 @@ app.get("/api/dashboard/stats", async (req, res) => {
     const yearlyProjection = (subSpend * 12) + (txnSpend * 12);
     
     // Financial Intelligence
-    const foodSpend = txns.filter(t => ['Food', 'Zomato', 'Swiggy'].includes(t.category) || /zomato|swiggy|uber eats/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
+    const foodSpend = txns.filter(t => ['Food', 'Zomato', 'Swiggy', 'Blinkit', 'Zepto'].includes(t.category) || /zomato|swiggy|uber eats|blinkit|zepto/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
+    const shoppingSpend = txns.filter(t => ['Shopping', 'Amazon', 'Flipkart'].includes(t.category) || /amazon|flipkart|myntra/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
+    const transportSpend = txns.filter(t => ['Transport', 'Uber', 'Ola', 'Rapido'].includes(t.category) || /uber|ola|rapido/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
     const subPercent = monthlySpend > 0 ? (subSpend / monthlySpend) * 100 : 0;
     
     let healthScore = 0;
@@ -213,9 +215,12 @@ app.get("/api/dashboard/stats", async (req, res) => {
       totalSubs: subs.length,
       totalTxns: txns.length,
       foodSpend,
+      shoppingSpend,
+      transportSpend,
       subPercent,
       healthScore,
-      monthlyBudget: user?.preferences?.monthlyBudget || 0
+      monthlyBudget: user?.preferences?.monthlyBudget || 0,
+      categoryBudgets: user?.preferences?.categoryBudgets || { food: 2000, shopping: 3000, transport: 1000 }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
