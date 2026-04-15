@@ -53,6 +53,14 @@ const subscriptionSchema = new mongoose.Schema({
   usageLogs: {
     type: [Date],
     default: []
+  },
+  priceHistory: [{
+    price: Number,
+    date: { type: Date, default: Date.now }
+  }],
+  externalId: {
+    type: String,
+    index: true
   }
 }, {
   timestamps: true

@@ -10,7 +10,8 @@ const UserSchema = new mongoose.Schema({
     monthlyBudget: { type: Number, default: 0 },
     notificationsEnabled: { type: Boolean, default: true },
     onboarded: { type: Boolean, default: false }
-  }
+  },
+  googleTokens: { type: Object, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", UserSchema);

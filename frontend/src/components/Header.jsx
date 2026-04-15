@@ -168,24 +168,31 @@ const AddSubscriptionModal = ({ userId, onClose }) => {
   );
 };
 
+import NotificationList from './NotificationList';
+
 const Header = ({ activeTab, onLoginClick }) => {
   const { user, isSignedIn } = useUser();
   const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, success, error
   const [showAddModal, setShowAddModal] = useState(false);
-
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
 
   useEffect(() => {
     const syncUser = async () => {
       if (isSignedIn && user) {
+        // Toggle unread status check
+        fetch(`http://localhost:5000/api/notifications?userId=${user.id}`)
+          .then(res => res.json())
+          .then(data => setHasUnread(data.some(n => !n.read)))
+          .catch(console.error);
+
         console.log("[Frontend Checkpoint] Starting user sync to backend...");
         setSyncStatus('syncing');
         
         try {
           const response = await fetch('http://localhost:5000/api/users/sync', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               clerkId: user.id,
               email: user.primaryEmailAddress?.emailAddress,
@@ -193,7 +200,6 @@ const Header = ({ activeTab, onLoginClick }) => {
               imageUrl: user.imageUrl,
             }),
           });
-
           const data = await response.json();
           if (data.success) {
             console.log("✅ [Frontend Checkpoint] User synced to database successfully");
@@ -208,9 +214,8 @@ const Header = ({ activeTab, onLoginClick }) => {
         }
       }
     };
-
     syncUser();
-  }, [isSignedIn, user]);
+  }, [isSignedIn, user, showNotifications]);
 
   const handleAvatarClick = () => {
     if (!isSignedIn) {
@@ -234,6 +239,19 @@ const Header = ({ activeTab, onLoginClick }) => {
 
       <div className="header-actions">
         <SignedIn>
+          <div style={{ position: 'relative' }}>
+            <button 
+              className={`notification-btn ${hasUnread ? 'has-unread' : ''}`}
+              onClick={() => setShowNotifications(!showNotifications)}
+            >
+              <Bell size={20} />
+              {hasUnread && <span className="unread-dot" />}
+            </button>
+            {showNotifications && (
+              <NotificationList userId={user?.id} onClose={() => setShowNotifications(false)} />
+            )}
+          </div>
+
           <button className="add-button" onClick={() => setShowAddModal(true)}>
             <Plus size={18} />
             <span>Add New</span>
@@ -383,35 +401,48 @@ const Header = ({ activeTab, onLoginClick }) => {
           transform: translateY(-1px);
         }
 
-        .icon-button {
+        .notification-btn {
           width: 44px;
           height: 44px;
           border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--text-main);
+          color: var(--text-muted);
           position: relative;
           background: white;
           border: 1px solid var(--border);
           transition: all 0.2s;
         }
 
-        .icon-button:hover {
+        .notification-btn:hover {
           background: #f8fafc;
           border-color: var(--primary-light);
           color: var(--primary);
         }
 
-        .notification-dot {
+        .notification-btn.has-unread {
+          color: var(--primary);
+          border-color: var(--primary-light);
+          background: #f5f7ff;
+        }
+
+        .unread-dot {
           position: absolute;
           top: 10px;
           right: 10px;
-          width: 8px;
-          height: 8px;
+          width: 10px;
+          height: 10px;
           background: #ef4444;
           border-radius: 50%;
           border: 2px solid white;
+          animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+          70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+          100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
 
         .divider-vertical {

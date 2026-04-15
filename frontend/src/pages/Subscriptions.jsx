@@ -140,6 +140,16 @@ const Subscriptions = ({ userId }) => {
                 </div>
               </div>
 
+              {rec && (rec.type === 'downgrade' || rec.type === 'alternative') && (
+                <div className="optimization-banner">
+                  <div className="opt-text">
+                    <strong>Optimization Detected</strong>
+                    <span>Save ₹{rec.savings}/mo by switching to {rec.targetPlan}</span>
+                  </div>
+                  <button className="opt-action">Switch & Save</button>
+                </div>
+              )}
+
               <div className="usage-section">
                 <p className="section-label">USED RECENTLY?</p>
                 <div className="usage-status">
@@ -389,6 +399,51 @@ const Subscriptions = ({ userId }) => {
           color: var(--text-muted);
           text-align: right;
           display: block;
+        }
+
+        .optimization-banner {
+          background: linear-gradient(135deg, #f0f7ff, #e0e7ff);
+          border: 1px solid #c7d2fe;
+          border-radius: 1rem;
+          padding: 1.25rem;
+          margin-bottom: 1.5rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 1rem;
+          animation: slideDown 0.3s ease-out;
+        }
+
+        .opt-text {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .opt-text strong {
+          font-size: 0.85rem;
+          color: #4338ca;
+          font-weight: 700;
+        }
+
+        .opt-text span {
+          font-size: 0.75rem;
+          color: #6366f1;
+          font-weight: 600;
+        }
+
+        .opt-action {
+          background: #4338ca;
+          color: white;
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .opt-action:hover {
+          background: #3730a3;
         }
 
         .usage-section {

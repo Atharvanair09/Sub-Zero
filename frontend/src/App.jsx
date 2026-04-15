@@ -4,6 +4,7 @@ import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import Subscriptions from './pages/Subscriptions';
 import Activity from './pages/Activity';
+import Automation from './pages/Automation';
 import Login from './pages/Login';
 import Onboarding from './components/Onboarding';
 import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
@@ -24,7 +25,7 @@ const GmailScanModal = ({ userId, onClose }) => {
 
   const startScan = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/google/url');
+      const response = await fetch(`http://localhost:5000/api/auth/google/url?userId=${userId}`);
       const { url } = await response.json();
       window.location.href = url; // Redirect to Google
     } catch (err) {
@@ -35,7 +36,7 @@ const GmailScanModal = ({ userId, onClose }) => {
   const runRealScan = async () => {
     setStep('scanning');
     try {
-      const response = await fetch('http://localhost:5000/api/gmail/scan');
+      const response = await fetch(`http://localhost:5000/api/gmail/scan?userId=${userId}`);
       const data = await response.json();
       if (data.success) {
         setDetected(data.detected);
@@ -267,6 +268,23 @@ function AppContent() {
     checkOnboarding();
   }, [isSignedIn, user]);
 
+  // Phase 2: NEW background sync on visit
+  useEffect(() => {
+    const backgroundSync = async () => {
+      if (isSignedIn && user) {
+        console.log("🚀 [Phase 2] Auto-Syncing transactions in background...");
+        try {
+          // Trigger a background scan. We don't need to show a UI for this.
+          // It will update notifications if it finds new things.
+          await fetch(`http://localhost:5000/api/gmail/scan?userId=${user.id}`);
+        } catch (e) {
+          console.warn("Background sync failed (likely missing tokens)");
+        }
+      }
+    };
+    backgroundSync();
+  }, [isSignedIn, user]);
+
   const renderContent = () => {
     const userId = user?.id;
     switch (activeTab) {
@@ -276,6 +294,8 @@ function AppContent() {
         return <Subscriptions userId={userId} />;
       case 'insights':
         return <Activity userId={userId} />;
+      case 'automation':
+        return <Automation userId={userId} />;
       default:
         return <Dashboard userId={userId} />;
     }

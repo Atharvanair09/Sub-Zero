@@ -48,13 +48,13 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="scan-card">
+        {/* <div className="scan-card">
           <p>Efficiency Scan</p>
           <button className="scan-button" onClick={onScanClick}>
             <Scan size={16} />
             <span>Scan for Savings</span>
           </button>
-        </div>
+        </div> */}
 
         <button className="help-link">
           <HelpCircle size={20} />
