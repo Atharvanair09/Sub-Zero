@@ -12,30 +12,33 @@ const data = [
   { name: 'SUN', value: 150 },
 ];
 
-const Dashboard = () => {
-  const [subscriptions, setSubscriptions] = React.useState([]);
+const Dashboard = ({ userId }) => {
+  const [stats, setStats] = React.useState({
+    monthlySpend: 0,
+    yearlyProjection: 0,
+    pieChart: [],
+    totalSubs: 0
+  });
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const fetchSubscriptions = async () => {
+    const fetchStats = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
       try {
-        const response = await fetch('http://localhost:5000/api/subscriptions');
+        const response = await fetch(`http://localhost:5000/api/dashboard/stats?userId=${userId}`);
         const data = await response.json();
-        setSubscriptions(data);
+        setStats(data);
         setLoading(false);
       } catch (err) {
         console.error(err);
         setLoading(false);
       }
     };
-    fetchSubscriptions();
-  }, []);
-
-  const totalMonthlySpend = subscriptions.reduce((sum, sub) => sum + sub.price, 0);
-  const potentialSavings = subscriptions
-    .filter(sub => !sub.usedRecently)
-    .reduce((sum, sub) => sum + sub.price, 0);
-  const optimizationPaths = subscriptions.filter(sub => !sub.usedRecently).length;
+    fetchStats();
+  }, [userId]);
 
   if (loading) return <div className="loading">Loading insights...</div>;
 
@@ -45,10 +48,10 @@ const Dashboard = () => {
         <div className="stat-card">
           <div className="stat-info">
             <p>Total Monthly Spend</p>
-            <h3>${totalMonthlySpend.toFixed(2)}</h3>
+            <h3>₹{stats.monthlySpend.toFixed(2)}</h3>
             <span className="trend positive">
               <TrendingUp size={14} />
-              Synced across {subscriptions.length} services
+              Synced across {stats.totalSubs} services
             </span>
           </div>
           <div className="stat-visual">
@@ -59,10 +62,10 @@ const Dashboard = () => {
         <div className="stat-card">
           <div className="stat-info">
             <p>AI Identified Savings</p>
-            <h3 className="highlight">${potentialSavings.toFixed(2)}</h3>
+            <h3 className="highlight">₹{(stats.monthlySpend * 0.15).toFixed(2)}</h3>
             <span className="trend positive">
               <Zap size={14} fill="currentColor" />
-              {optimizationPaths} optimization paths ready
+              Optimization paths ready
             </span>
           </div>
           <div className="stat-visual">
@@ -73,7 +76,7 @@ const Dashboard = () => {
         <div className="stat-card">
           <div className="stat-info">
             <p>Active Subscriptions</p>
-            <h3>{subscriptions.length}</h3>
+            <h3>{stats.totalSubs}</h3>
             <span className="trend">
               Monitoring in real-time
             </span>
@@ -84,7 +87,7 @@ const Dashboard = () => {
                 <div 
                   key={i} 
                   className="dot" 
-                  style={{ background: i < subscriptions.length ? '#6366f1' : '#e2e8f0' }} 
+                  style={{ background: i < stats.totalSubs ? '#6366f1' : '#e2e8f0' }} 
                 />
               ))}
             </div>

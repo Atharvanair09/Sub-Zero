@@ -22,7 +22,7 @@ const optimizationActions = [
     action: 'Automatic Downgrade',
     reason: 'Usage analytics triggered tier shift',
     entity: 'Netflix Premium',
-    impact: '+$6.50 /mo',
+    impact: '+₹450 /mo',
     status: 'SUCCESS',
     icon: 'N'
   },
@@ -32,7 +32,7 @@ const optimizationActions = [
     action: 'Bundle Negotiation',
     reason: 'AI Negotiator applied coupon code',
     entity: 'Adobe CC',
-    impact: '+$12.00 /mo',
+    impact: '+₹900 /mo',
     status: 'SUCCESS',
     icon: 'A'
   },
@@ -48,15 +48,18 @@ const optimizationActions = [
   }
 ];
 
-const Activity = () => {
+const Activity = ({ userId }) => {
   const [subscriptions, setSubscriptions] = React.useState([]);
 
   React.useEffect(() => {
-    fetch('http://localhost:5000/api/subscriptions')
+    const url = userId 
+      ? `http://localhost:5000/api/subscriptions?userId=${userId}` 
+      : 'http://localhost:5000/api/subscriptions';
+    fetch(url)
       .then(res => res.json())
       .then(data => setSubscriptions(data))
       .catch(err => console.error(err));
-  }, []);
+  }, [userId]);
 
   const potentialSavings = subscriptions
     .filter(sub => !sub.usedRecently)
@@ -71,7 +74,7 @@ const Activity = () => {
         <div className="header-chips">
           <div className="summary-pill blue">
             <span>POTENTIAL SAVINGS</span>
-            <strong>${potentialSavings.toFixed(2)}</strong>
+            <strong>₹{potentialSavings.toFixed(2)}</strong>
           </div>
           <div className="summary-pill purple">
             <span>ACTIVE SERVICES</span>

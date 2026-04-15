@@ -31,6 +31,28 @@ const subscriptionSchema = new mongoose.Schema({
   nextBillingDate: {
     type: Date,
     required: true
+  },
+  lastUsed: {
+    type: Date,
+    default: Date.now
+  },
+  logo: {
+    type: String
+  },
+  plan: {
+    type: String
+  },
+  color: {
+    type: String,
+    default: '#6366f1'
+  },
+  usedRecently: {
+    type: Boolean,
+    default: true
+  },
+  usageLogs: {
+    type: [Date],
+    default: []
   }
 }, {
   timestamps: true

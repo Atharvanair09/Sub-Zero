@@ -3,15 +3,52 @@ import { Search, Bell, Plus, LayoutGrid, LogOut, X, CreditCard, DollarSign, Glob
 import { useUser, SignOutButton, SignedIn, SignedOut } from '@clerk/clerk-react';
 import { useEffect, useState } from 'react';
 
-const AddSubscriptionModal = ({ onClose }) => {
+const SERVICE_PRESETS = [
+  { name: 'Netflix', prices: ['199', '499', '649'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=netflix.com', color: '#E50914' },
+  { name: 'Spotify', prices: ['119', '149', '179'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=spotify.com', color: '#1DB954' },
+  { name: 'Adobe CC', prices: ['638', '2394', '4230'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=adobe.com', color: '#FA0F00' },
+  { name: 'Dropbox', prices: ['800', '1500', '2100'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=dropbox.com', color: '#0061FF' },
+  { name: 'Disney+', prices: ['149', '299', '899'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=disneyplus.com', color: '#111827' },
+  { name: 'YouTube Premium', prices: ['129', '139', '189'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=youtube.com', color: '#FF0000' },
+];
+
+const AddSubscriptionModal = ({ userId, onClose }) => {
   const [formData, setFormData] = useState({
     name: '',
     price: '',
     plan: 'Premium',
-    logo: 'https://www.cdnlogo.com/logos/n/11/netflix.svg',
-    color: '#6366f1'
+    logo: '',
+    color: '#6366f1',
+    category: 'Entertainment',
+    billingCycle: 'monthly'
   });
+  const [isCustom, setIsCustom] = useState(false);
+  const [availablePrices, setAvailablePrices] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleServiceChange = (e) => {
+    const selectedName = e.target.value;
+    if (selectedName === 'custom') {
+      setIsCustom(true);
+      setAvailablePrices([]);
+      setFormData({ ...formData, name: '', price: '', logo: '', color: '#6366f1' });
+    } else {
+      setIsCustom(false);
+      const preset = SERVICE_PRESETS.find(p => p.name === selectedName);
+      if (preset) {
+        setAvailablePrices(preset.prices);
+        setFormData({
+          ...formData,
+          name: preset.name,
+          price: preset.prices[0],
+          logo: preset.logo,
+          color: preset.color,
+          category: 'Streaming',
+          billingCycle: 'monthly'
+        });
+      }
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,12 +58,12 @@ const AddSubscriptionModal = ({ onClose }) => {
       const response = await fetch('http://localhost:5000/api/subscriptions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, userId })
       });
       const data = await response.json();
       if (data.success) {
         onClose();
-        window.location.reload(); // Quick reset for hackathon
+        window.location.reload(); 
       }
     } catch (err) {
       console.error(err);
@@ -40,34 +77,63 @@ const AddSubscriptionModal = ({ onClose }) => {
         <div className="modal-header">
           <div className="modal-title-desc">
             <h3>Add Subscription</h3>
-            <p>Enter the details of your new service.</p>
+            <p>Select a service or enter details manually.</p>
           </div>
           <button className="close-btn" onClick={onClose}><X size={20} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
-            <label><CreditCard size={14} /> Service Name</label>
-            <input 
-              type="text" 
-              placeholder="e.g. Netflix, Spotify" 
-              required 
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-            />
+            <label><Plus size={14} /> Service Selection</label>
+            <select 
+              className="service-select" 
+              onChange={handleServiceChange}
+              defaultValue=""
+            >
+              <option value="" disabled>Choose a popular service...</option>
+              {SERVICE_PRESETS.map(p => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+              <option value="custom">-- Custom Service --</option>
+            </select>
           </div>
+
+          {isCustom && (
+            <div className="form-group slide-down">
+              <label><CreditCard size={14} /> Custom Service Name</label>
+              <input 
+                type="text" 
+                placeholder="Name of service" 
+                required 
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+              />
+            </div>
+          )}
 
           <div className="form-row">
             <div className="form-group">
-              <label><DollarSign size={14} /> Monthly Price</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                placeholder="0.00" 
-                required 
-                value={formData.price}
-                onChange={(e) => setFormData({...formData, price: e.target.value})}
-              />
+              <label><DollarSign size={14} /> Monthly Price (₹)</label>
+              {availablePrices.length > 0 ? (
+                <select 
+                  className="price-select"
+                  value={formData.price}
+                  onChange={(e) => setFormData({...formData, price: e.target.value})}
+                >
+                  {availablePrices.map(p => (
+                    <option key={p} value={p}>₹{p}</option>
+                  ))}
+                </select>
+              ) : (
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  placeholder="0.00" 
+                  required 
+                  value={formData.price}
+                  onChange={(e) => setFormData({...formData, price: e.target.value})}
+                />
+              )}
             </div>
             <div className="form-group">
               <label><LayoutGrid size={14} /> Plan Type</label>
@@ -81,7 +147,7 @@ const AddSubscriptionModal = ({ onClose }) => {
           </div>
 
           <div className="form-group">
-            <label><Globe size={14} /> Logo URL (Optional)</label>
+            <label><Globe size={14} /> Logo URL</label>
             <input 
               type="text" 
               placeholder="https://..." 
@@ -92,7 +158,7 @@ const AddSubscriptionModal = ({ onClose }) => {
 
           <div className="modal-footer">
             <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary-btn" disabled={isSubmitting}>
+            <button type="submit" className="primary-btn" disabled={isSubmitting || (!formData.name && !isCustom)}>
               {isSubmitting ? 'Adding...' : 'Add Subscription'}
             </button>
           </div>
@@ -208,7 +274,7 @@ const Header = ({ activeTab, onLoginClick }) => {
       </div>
 
       {showAddModal && (
-        <AddSubscriptionModal onClose={() => setShowAddModal(false)} />
+        <AddSubscriptionModal userId={user?.id} onClose={() => setShowAddModal(false)} />
       )}
 
       <style>{`
@@ -532,7 +598,7 @@ const Header = ({ activeTab, onLoginClick }) => {
           gap: 0.4rem;
         }
 
-        .form-group input {
+        .form-group input, .form-group select {
           width: 100%;
           height: 48px;
           padding: 0 1rem;
@@ -543,7 +609,7 @@ const Header = ({ activeTab, onLoginClick }) => {
           transition: all 0.2s;
         }
 
-        .form-group input:focus {
+        .form-group input:focus, .form-group select:focus {
           outline: none;
           border-color: var(--primary);
           background: white;
@@ -582,6 +648,23 @@ const Header = ({ activeTab, onLoginClick }) => {
           font-size: 0.9rem;
           color: var(--text-main);
         }
+
+        .service-select, .price-select {
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 1rem center;
+          background-size: 1.25rem;
+        }
+
+        .slide-down {
+          animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
 
     </header>
@@ -589,5 +672,3 @@ const Header = ({ activeTab, onLoginClick }) => {
 };
 
 export default Header;
-
-

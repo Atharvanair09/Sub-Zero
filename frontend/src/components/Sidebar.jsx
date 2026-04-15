@@ -2,7 +2,7 @@ import React from 'react';
 import { LayoutDashboard, CreditCard, PieChart, Zap, Settings, HelpCircle, Scan, ChevronRight } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 
-const Sidebar = ({ activeTab, setActiveTab, onLoginClick }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
   const { user, isSignedIn } = useUser();
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -50,7 +50,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick }) => {
       <div className="sidebar-footer">
         <div className="scan-card">
           <p>Efficiency Scan</p>
-          <button className="scan-button">
+          <button className="scan-button" onClick={onScanClick}>
             <Scan size={16} />
             <span>Scan for Savings</span>
           </button>

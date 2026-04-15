@@ -7,17 +7,29 @@ const forecastData = [
   { value: 250 }, { value: 180 }, { value: 450 }, { value: 400 }
 ];
 
-const Subscriptions = () => {
+const Subscriptions = ({ userId }) => {
   const [subscriptions, setSubscriptions] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchSubscriptions = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/subscriptions');
+      const url = userId 
+        ? `http://localhost:5000/api/subscriptions?userId=${userId}` 
+        : 'http://localhost:5000/api/subscriptions';
+      const response = await fetch(url);
       const data = await response.json();
       setSubscriptions(data);
+      
+      // Fetch recommendations
+      if (userId) {
+        const recResponse = await fetch(`http://localhost:5000/api/recommendations?userId=${userId}`);
+        const recData = await recResponse.json();
+        setRecommendations(recData);
+      }
+      
       setLoading(false);
     } catch (err) {
       console.error("Fetch error:", err);
@@ -28,7 +40,7 @@ const Subscriptions = () => {
 
   useEffect(() => {
     fetchSubscriptions();
-  }, []);
+  }, [userId]);
 
   const handleUsageToggle = async (id, usedRecently) => {
     try {
@@ -39,7 +51,11 @@ const Subscriptions = () => {
       });
       const data = await response.json();
       if (data.success) {
-        setSubscriptions(prev => prev.map(sub => sub.id === id ? { ...sub, usedRecently } : sub));
+        setSubscriptions(prev => prev.map(sub => sub._id === id ? { ...sub, usedRecently } : sub));
+        // Refresh recommendations after usage update
+        const recResponse = await fetch(`http://localhost:5000/api/recommendations?userId=${userId}`);
+        const recData = await recResponse.json();
+        setRecommendations(recData);
       }
     } catch (err) {
       console.error("Usage toggle error:", err);
@@ -57,7 +73,7 @@ const Subscriptions = () => {
         const data = await response.json();
         if (data.success) {
           alert(`Successfully cancelled ${name}`);
-          setSubscriptions(prev => prev.filter(sub => sub.id !== id));
+          setSubscriptions(prev => prev.filter(sub => sub._id !== id));
         }
       } catch (err) {
         console.error("Cancel error:", err);
@@ -80,93 +96,96 @@ const Subscriptions = () => {
         <h1>Your Subscriptions</h1>
         <div className="summary-row">
           <div className="analysis-text">
-            AI Analysis: You have <span>{subscriptions.length} active services</span> totaling <span>${totalMonthlySpend.toFixed(2)}/mo</span>.
+            AI Analysis: You have <span>{subscriptions.length} active services</span> totaling <span>₹{totalMonthlySpend.toFixed(2)}/mo</span>.
             {potentialSavings > 0 && (
-              <> We've identified unused platforms that could save you <span>${potentialSavings.toFixed(2)} monthly</span>.</>
+              <> We've identified unused platforms that could save you <span>₹{potentialSavings.toFixed(2)} monthly</span>.</>
             )}
           </div>
           <div className="summary-stats">
             <div className="mini-stat">
               <p>Monthly Spend</p>
-              <h3>${totalMonthlySpend.toFixed(2)}</h3>
+              <h3>₹{totalMonthlySpend.toFixed(2)}</h3>
             </div>
             <div className="mini-stat">
               <p>Potential Savings</p>
-              <h3 className="highlight">${potentialSavings.toFixed(2)}</h3>
+              <h3 className="highlight">₹{potentialSavings.toFixed(2)}</h3>
             </div>
           </div>
         </div>
       </div>
 
       <div className="subscription-grid">
-        {subscriptions.map((sub) => (
-          <div className="sub-card card" key={sub.id}>
-            {!sub.usedRecently && <div className="unused-warning">AI: SUGGEST CANCELLING</div>}
-            <div className="sub-top">
-              <div className="sub-branding">
-                <div className="sub-logo" style={{ background: '#f8fafc' }}>
-                  <img src={sub.logo} alt={sub.name} onError={(e) => {e.target.style.display='none';}} />
+        {subscriptions.map((sub) => {
+          const rec = recommendations.find(r => r.subscriptionId === sub._id);
+          return (
+            <div className="sub-card card" key={sub._id}>
+              {rec && <div className="unused-warning">AI: {rec.type.toUpperCase()} RECOMMENDATION</div>}
+              <div className="sub-top">
+                <div className="sub-branding">
+                  <div className="sub-logo" style={{ background: '#f8fafc' }}>
+                    <img src={sub.logo} alt={sub.name} onError={(e) => {e.target.style.display='none';}} />
+                  </div>
+                  <div className="sub-names">
+                    <h3>{sub.name}</h3>
+                    <div className="plan-badge">
+                      <span className="badge-text">{sub.plan}</span>
+                      <span className="dot">•</span>
+                      <span className="bill-date">Next: {new Date(sub.nextBillingDate).toLocaleDateString()}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="sub-names">
-                  <h3>{sub.name}</h3>
-                  <div className="plan-badge">
-                    <span className="badge-text">{sub.plan}</span>
-                    <span className="dot">•</span>
-                    <span className="bill-date">Next: {sub.nextBill}</span>
+                <div className="sub-pricing">
+                  <span className="price">₹{sub.price}</span>
+                  <span className="period">Monthly bill</span>
+                </div>
+              </div>
+
+              <div className="usage-section">
+                <p className="section-label">USED RECENTLY?</p>
+                <div className="usage-status">
+                  <div className="usage-info">
+                    <p className={!sub.usedRecently ? 'text-danger' : 'text-muted'}>
+                      Last used: {new Date(sub.lastUsed).toLocaleDateString()}
+                    </p>
+                    {rec && (
+                      <p className="ai-insight">
+                        <Zap size={12} fill="#ef4444" color="#ef4444" />
+                        <span>{rec.message}</span>
+                      </p>
+                    )}
+                  </div>
+                  <div className="binary-buttons">
+                    <button 
+                      className={`btn-small ${sub.usedRecently ? 'active' : ''}`}
+                      onClick={() => handleUsageToggle(sub._id, true)}
+                    >
+                      YES
+                    </button>
+                    <button 
+                      className={`btn-small ${!sub.usedRecently ? 'active-no' : ''}`}
+                      onClick={() => handleUsageToggle(sub._id, false)}
+                    >
+                      NO
+                    </button>
                   </div>
                 </div>
               </div>
-              <div className="sub-pricing">
-                <span className="price">${sub.price}</span>
-                <span className="period">Monthly bill</span>
-              </div>
-            </div>
 
-            <div className="usage-section">
-              <p className="section-label">USED RECENTLY?</p>
-              <div className="usage-status">
-                <div className="usage-info">
-                  <p className={!sub.usedRecently ? 'text-danger' : 'text-muted'}>
-                    {sub.lastActivity}
-                  </p>
-                  {!sub.usedRecently && (
-                    <p className="ai-insight">
-                      <Zap size={12} fill="#ef4444" color="#ef4444" />
-                      <span>Low usage detected. Cancel to save ${sub.price}.</span>
-                    </p>
-                  )}
+              <div className="sub-footer">
+                <div className="status-row">
+                  <div className={`status-dot ${!sub.usedRecently ? 'warning' : 'active'}`} />
+                  <span>{sub.status}</span>
                 </div>
-                <div className="binary-buttons">
-                  <button 
-                    className={`btn-small ${sub.usedRecently ? 'active' : ''}`}
-                    onClick={() => handleUsageToggle(sub.id, true)}
-                  >
-                    YES
-                  </button>
-                  <button 
-                    className={`btn-small ${!sub.usedRecently ? 'active-no' : ''}`}
-                    onClick={() => handleUsageToggle(sub.id, false)}
-                  >
-                    NO
-                  </button>
-                </div>
+                <button 
+                  className={`cancel-btn ${rec?.type === 'cancel' ? 'danger' : ''}`}
+                  onClick={() => handleCancel(sub._id, sub.name)}
+                >
+                  CANCEL SUBSCRIPTION
+                </button>
               </div>
             </div>
-
-            <div className="sub-footer">
-              <div className="status-row">
-                <div className={`status-dot ${!sub.usedRecently ? 'warning' : 'active'}`} />
-                <span>{sub.status}</span>
-              </div>
-              <button 
-                className={`cancel-btn ${!sub.usedRecently ? 'danger' : ''}`}
-                onClick={() => handleCancel(sub.id, sub.name)}
-              >
-                CANCEL SUBSCRIPTION
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {subscriptions.length === 0 && (
           <div className="empty-state card">
             <Check size={48} color="#10b981" />
