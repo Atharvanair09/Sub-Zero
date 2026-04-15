@@ -27,7 +27,8 @@ const Dashboard = ({ userId }) => {
     subPercent: 0,
     healthScore: 100,
     monthlyBudget: 0,
-    categoryBudgets: { food: 2000, shopping: 3000, transport: 1000 }
+    categoryBudgets: { food: 2000, shopping: 3000, transport: 1000 },
+    recentActivity: []
   });
   const [insights, setInsights] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -162,39 +163,32 @@ const Dashboard = ({ userId }) => {
             <h3>Recent Activity</h3>
           </div>
           <div className="activity-list">
-            <div className="activity-item">
-              <div className="activity-icon blue"><CreditCard size={18} /></div>
-              <div className="activity-content">
-                <div className="activity-top">
-                  <span className="item-name">Netflix Premium</span>
-                  <span className="item-price">$19.99</span>
+            {(stats.recentActivity || []).map((item, idx) => {
+              const isTxn = item.type === 'transaction';
+              const timeString = new Date(item.date).toLocaleDateString() === new Date().toLocaleDateString()
+                ? "TODAY" : new Date(item.date).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+              return (
+                <div key={item.id || idx} className="activity-item">
+                  <div className={`activity-icon ${isTxn ? 'blue' : item.subType === 'price_increase' ? 'red' : 'purple'}`}>
+                    {item.logo ? <img src={item.logo} alt="" className="item-logo-img" /> : (isTxn ? <CreditCard size={18} /> : item.subType === 'price_increase' ? <ShieldAlert size={18} /> : <Zap size={18} />)}
+                  </div>
+                  <div className="activity-content">
+                    <div className="activity-top">
+                      <span className="item-name">{item.name}</span>
+                      <span className={`item-price ${!isTxn ? 'positive' : ''}`}>
+                         {isTxn ? `₹${item.price}` : item.price}
+                      </span>
+                    </div>
+                    <p>{item.message}</p>
+                    <span className="item-time">{timeString} • {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
                 </div>
-                <p>Automatic payment confirmed</p>
-                <span className="item-time">2 HOURS AGO</span>
-              </div>
-            </div>
-            <div className="activity-item">
-              <div className="activity-icon purple"><Zap size={18} /></div>
-              <div className="activity-content">
-                <div className="activity-top">
-                  <span className="item-name">AI Savings Found</span>
-                  <span className="item-price positive">+$8.00/mo</span>
-                </div>
-                <p>Lower tier available for Figma</p>
-                <span className="item-time">5 HOURS AGO</span>
-              </div>
-            </div>
-            <div className="activity-item">
-              <div className="activity-icon red"><ShieldAlert size={18} /></div>
-              <div className="activity-content">
-                <div className="activity-top">
-                  <span className="item-name">Price Increase</span>
-                  <span className="item-price negative">+$4.50</span>
-                </div>
-                <p>Adobe Creative Cloud</p>
-                <span className="item-time">YESTERDAY</span>
-              </div>
-            </div>
+              );
+            })}
+            {(stats.recentActivity || []).length === 0 && (
+              <p className="text-center text-muted py-4">No recent activity detected.</p>
+            )}
           </div>
 
           <div className="account-health">
@@ -476,6 +470,15 @@ const Dashboard = ({ userId }) => {
           display: flex;
           align-items: center;
           justify-content: center;
+          overflow: hidden;
+        }
+
+        .item-logo-img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 6px;
+          background: white;
         }
 
         .activity-icon.blue { background: #eff6ff; color: #3b82f6; }

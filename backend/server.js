@@ -208,6 +208,33 @@ app.get("/api/dashboard/stats", async (req, res) => {
       value: categoryData[cat]
     }));
 
+    // Dynamic Recent Activity (Syncing notifications + transactions)
+    const recentTxns = await Transaction.find({ userId }).sort({ date: -1 }).limit(5);
+    const recentNotifs = await Notification.find({ userId }).sort({ createdAt: -1 }).limit(3);
+    
+    const recentActivity = [
+      ...recentTxns.map(t => ({
+        id: t._id,
+        type: 'transaction',
+        name: t.name,
+        price: t.amount,
+        message: 'Payment confirmed',
+        date: t.date || t.createdAt,
+        category: t.category,
+        logo: t.logo
+      })),
+      ...recentNotifs.map(n => ({
+        id: n._id,
+        type: 'notification',
+        name: n.title,
+        price: n.priority === 'high' ? 'ALERT' : 'AI INFO',
+        message: n.message,
+        date: n.createdAt,
+        subType: n.type,
+        logo: 'https://cdn-icons-png.flaticon.com/512/10433/10433048.png' // Default AI logo
+      }))
+    ].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+
     res.json({
       monthlySpend,
       yearlyProjection,
@@ -220,7 +247,8 @@ app.get("/api/dashboard/stats", async (req, res) => {
       subPercent,
       healthScore,
       monthlyBudget: user?.preferences?.monthlyBudget || 0,
-      categoryBudgets: user?.preferences?.categoryBudgets || { food: 2000, shopping: 3000, transport: 1000 }
+      categoryBudgets: user?.preferences?.categoryBudgets || { food: 2000, shopping: 3000, transport: 1000 },
+      recentActivity
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
