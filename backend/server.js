@@ -20,6 +20,7 @@ app.use(express.json());
 const User = require("./models/User");
 const Subscription = require("./models/Subscription");
 const Notification = require("./models/Notification");
+const Transaction = require("./models/Transaction");
 
 // Plan Alternatives Database (Phase 2: Plan Optimization)
 const PLAN_ALTERNATIVES = {
@@ -54,10 +55,27 @@ app.post("/api/subscriptions", async (req, res) => {
   const { userId, name, price, plan, logo, color, category, billingCycle, nextBillingDate, externalId } = req.body;
   
   try {
+    const isTransaction = ['Food', 'Travel', 'Bank Transaction', 'Shopping'].includes(category) || 
+                          /zomato|swiggy|uber|ola|blinkit|zepto|amazon (?!prime)/i.test(name);
+    const parsedPrice = parseFloat(price);
+
+    if (isTransaction) {
+       const newTxn = new Transaction({
+         userId,
+         name,
+         amount: parsedPrice,
+         category: category || 'Bank Transaction',
+         logo: logo || `https://www.google.com/s2/favicons?sz=128&domain=${name.toLowerCase().replace(/\s/g, '')}.com`,
+         externalId
+       });
+       await newTxn.save();
+       return res.json({ success: true, transaction: newTxn });
+    }
+
     const newSub = new Subscription({
       userId,
       name,
-      price: parseFloat(price),
+      price: parsedPrice,
       plan: plan || 'BASIC',
       logo: logo || 'https://www.cdnlogo.com/logos/z/19/zapier.svg',
       nextBillingDate: nextBillingDate ? new Date(nextBillingDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -79,7 +97,31 @@ app.get("/api/subscriptions", async (req, res) => {
   const { userId } = req.query;
   try {
     const subscriptions = await Subscription.find(userId ? { userId } : {});
-    res.json(subscriptions);
+    const subsWithHealth = subscriptions.map(s => {
+        const cycleDays = s.billingCycle === 'monthly' ? 30 : 365;
+        const uniqueDaysUsed = new Set(s.usageLogs.map(log => new Date(log).toISOString().split('T')[0])).size;
+        let itemScore = (uniqueDaysUsed / cycleDays) * 100;
+        if (!s.usedRecently) itemScore -= 30;
+        if (s.price < 500 && uniqueDaysUsed > 5) itemScore += 20;
+        itemScore = Math.min(Math.max(0, itemScore), 100);
+        if(uniqueDaysUsed === 0 && s.usedRecently) itemScore = 85; 
+
+        return {
+          ...s.toObject(),
+          healthScore: Math.round(itemScore)
+        };
+    });
+    res.json(subsWithHealth);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/transactions", async (req, res) => {
+  const { userId } = req.query;
+  try {
+    const transactions = await Transaction.find(userId ? { userId } : {}).sort({ date: -1 });
+    res.json(transactions);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -113,14 +155,51 @@ app.get("/api/dashboard/stats", async (req, res) => {
   const { userId } = req.query;
   try {
     const subs = await Subscription.find({ userId });
+    const user = await User.findOne({ clerkId: userId });
     
-    const monthlySpend = subs.reduce((sum, s) => sum + (s.billingCycle === 'monthly' ? s.price : s.price / 12), 0);
-    const yearlyProjection = monthlySpend * 12;
+    // Get recent transactions to accurately calculate monthly spend
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const txns = await Transaction.find({ userId, date: { $gte: thirtyDaysAgo } });
     
+    const subSpend = subs.reduce((sum, s) => sum + (s.billingCycle === 'monthly' ? s.price : s.price / 12), 0);
+    const txnSpend = txns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    
+    const monthlySpend = subSpend + txnSpend;
+    const yearlyProjection = (subSpend * 12) + (txnSpend * 12);
+    
+    // Financial Intelligence
+    const foodSpend = txns.filter(t => ['Food', 'Zomato', 'Swiggy'].includes(t.category) || /zomato|swiggy|uber eats/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
+    const subPercent = monthlySpend > 0 ? (subSpend / monthlySpend) * 100 : 0;
+    
+    let healthScore = 0;
+    if(subs.length > 0) {
+      let totalScore = 0;
+      subs.forEach(s => {
+        const cycleDays = s.billingCycle === 'monthly' ? 30 : 365;
+        const uniqueDaysUsed = new Set(s.usageLogs.map(log => new Date(log).toISOString().split('T')[0])).size;
+        let itemScore = (uniqueDaysUsed / cycleDays) * 100;
+        if (!s.usedRecently) itemScore -= 30; // penalty
+        if (s.price < 500 && uniqueDaysUsed > 5) itemScore += 20;
+        itemScore = Math.min(Math.max(0, itemScore), 100);
+        if(uniqueDaysUsed === 0 && s.usedRecently) itemScore = 85;
+        totalScore += itemScore;
+      });
+      healthScore = Math.round(totalScore / subs.length);
+    } else {
+      healthScore = 100;
+    }
+
     const categoryData = subs.reduce((acc, s) => {
       acc[s.category] = (acc[s.category] || 0) + s.price;
       return acc;
     }, {});
+
+    // Add transaction categories
+    txns.forEach(t => {
+      let cat = t.category || 'Transaction';
+      if(/zomato|swiggy|uber eats/i.test(t.name)) cat = "Food";
+      categoryData[cat] = (categoryData[cat] || 0) + t.amount;
+    });
 
     const pieChart = Object.keys(categoryData).map(cat => ({
       name: cat,
@@ -131,7 +210,12 @@ app.get("/api/dashboard/stats", async (req, res) => {
       monthlySpend,
       yearlyProjection,
       pieChart,
-      totalSubs: subs.length
+      totalSubs: subs.length,
+      totalTxns: txns.length,
+      foodSpend,
+      subPercent,
+      healthScore,
+      monthlyBudget: user?.preferences?.monthlyBudget || 0
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -383,6 +467,8 @@ app.get("/api/gmail/scan", async (req, res) => {
         { name: 'Netflix', domain: 'netflix.com', category: 'OTT' },
         { name: 'Spotify', domain: 'spotify.com', category: 'Music' },
         { name: 'Amazon Prime', domain: 'amazon.com', category: 'Shopping' },
+        { name: 'Amazon', domain: 'amazon.in', category: 'Shopping' },
+        { name: 'Flipkart', domain: 'flipkart.com', category: 'Shopping' },
         { name: 'YouTube', domain: 'youtube.com', category: 'OTT' },
         { name: 'Disney', domain: 'disneyplus.com', category: 'OTT' },
         { name: 'LinkedIn', domain: 'linkedin.com', category: 'Work' },
@@ -396,7 +482,11 @@ app.get("/api/gmail/scan", async (req, res) => {
         { name: 'Hotstar', domain: 'hotstar.com', category: 'Streaming' },
         { name: 'Zomato', domain: 'zomato.com', category: 'Food' },
         { name: 'Swiggy', domain: 'swiggy.com', category: 'Food' },
-        { name: 'Uber', domain: 'uber.com', category: 'Travel' }
+        { name: 'Uber', domain: 'uber.com', category: 'Transport' },
+        { name: 'Ola', domain: 'olacabs.com', category: 'Transport' },
+        { name: 'Rapido', domain: 'rapido.bike', category: 'Transport' },
+        { name: 'Blinkit', domain: 'blinkit.com', category: 'Food' },
+        { name: 'Zepto', domain: 'zeptonow.com', category: 'Food' }
       ];
 
       const textForRegex = subject + " " + snippet;
@@ -424,14 +514,14 @@ app.get("/api/gmail/scan", async (req, res) => {
         const priceMatch = textForRegex.match(/(?:₹|\$|rs\.?|usd|inr)\s?(\d+(?:[.,]\d{2})?)/i);
         const price = priceMatch ? priceMatch[1] : "199";
 
-        // Filter out if already added as a subscription
+        // Filter out if already added as a subscription or transaction
         const Subscription = mongoose.model('Subscription');
-        const alreadyExists = await Subscription.findOne({ 
-          userId, 
-          externalId: msg.id 
-        });
+        const Transaction = mongoose.model('Transaction');
+        
+        const alreadyExistsInSub = await Subscription.findOne({ userId, externalId: msg.id });
+        const alreadyExistsInTxn = await Transaction.findOne({ userId, externalId: msg.id });
 
-        if (!alreadyExists && !detected.find(d => d.name === vendorName)) {
+        if (!alreadyExistsInSub && !alreadyExistsInTxn && !detected.find(d => d.name === vendorName)) {
            detected.push({
              name: vendorName,
              price: price.replace(',', ''),
@@ -456,6 +546,109 @@ app.get("/api/gmail/scan", async (req, res) => {
       return res.status(401).json({ error: "Google authentication expired. Please re-authenticate." });
     }
     res.status(500).json({ error: "Failed to scan Gmail" });
+  }
+});
+
+app.get("/api/insights/patterns", async (req, res) => {
+  const { userId } = req.query;
+  try {
+    const txns = await Transaction.find(userId ? { userId } : {});
+    
+    let foodTxns = [];
+    let shoppingTxns = [];
+    let weekendFood = 0;
+    let lateNightOrders = 0;
+    let totalFoodSpend = 0;
+
+    txns.forEach(t => {
+      const isFood = ['Food', 'Zomato', 'Swiggy', 'Blinkit', 'Zepto'].includes(t.category) || /zomato|swiggy|uber eats/i.test(t.name);
+      const isShopping = ['Shopping', 'Amazon', 'Flipkart'].includes(t.category) || /amazon|flipkart|myntra/i.test(t.name);
+      
+      const date = new Date(t.date || Date.now());
+      const day = date.getDay();
+      const hour = date.getHours();
+
+      if (isFood) {
+        foodTxns.push(t);
+        totalFoodSpend += t.amount || 0;
+        if (day === 0 || day === 6) weekendFood++;
+        if (hour >= 22 || hour <= 4) lateNightOrders++;
+      }
+      if (isShopping) {
+        shoppingTxns.push(t);
+      }
+    });
+
+    const insights = [];
+
+    // Food behaviors
+    if (foodTxns.length >= 2) {
+      if (weekendFood > foodTxns.length * 0.5) {
+        insights.push({ type: 'food', title: 'Weekend Craver', message: 'You order food mostly on weekends. Try meal-prepping on Sundays to save here!' });
+      } else {
+        const potentialSavings = Math.round((totalFoodSpend / foodTxns.length) * 2 * 4); // saving 2 orders a week
+        insights.push({ type: 'food', title: 'High Frequency', message: `You order food frequently. Reducing this by 2 orders/wk helps you save ₹${potentialSavings || 800}/mo!` });
+      }
+    }
+
+    // Late night
+    if (lateNightOrders > 0) {
+      insights.push({ type: 'behavioral', title: 'Late Night Spikes', message: `Your spending spikes after 10 PM. Try keeping a late-night snack box at home!` });
+    }
+
+    // Shopping
+    if (shoppingTxns.length >= 1) {
+      const shopSpend = shoppingTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+      insights.push({ type: 'shopping', title: 'Impulse Spikes', message: `Shopping impulse detected (₹${Math.round(shopSpend)}). Wait 24h before closing checkout to verify if it's a need.` });
+    }
+
+    res.json({ success: true, insights });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/chat", async (req, res) => {
+  const { message, userId } = req.body;
+  try {
+    const subs = await Subscription.find(userId ? { userId } : {});
+    const msg = message.toLowerCase();
+    
+    let reply = "I am your SubZero Financial Assistant. I analyze your subscriptions and find you savings. How can I help you today?";
+    
+    if (msg.includes("save") || msg.includes("savings")) {
+      const unusedSubs = subs.filter(s => !s.usedRecently);
+      const totalSavings = unusedSubs.reduce((sum, s) => sum + s.price, 0);
+      if(totalSavings > 0) {
+        reply = `You have ${unusedSubs.length} unused subscriptions. If you cancel them, you can save ₹${totalSavings} this month!`;
+      } else {
+        reply = `You are fully optimized right now! All your subscriptions show regular usage. But I can monitor for better deals.`;
+      }
+    } else if (msg.includes("cancel") || msg.includes("waste") || msg.includes("wasting") || msg.includes("where am i wasting")) {
+      const txns = await Transaction.find(userId ? { userId } : {});
+      let foodSpend = txns.filter(t => ['Food', 'Zomato', 'Swiggy'].includes(t.category) || /zomato|swiggy|uber eats/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
+
+      const worstSub = subs.sort((a,b) => b.price - a.price).find(s => !s.usedRecently);
+      
+      if (foodSpend > 1500) {
+           reply = `Looking at your data, you spent ₹${foodSpend} on food deliveries recently. This is a huge area for optimization! `;
+           if (worstSub) {
+             reply += `Also, I recommend canceling **${worstSub.name}** right now, it costs ₹${worstSub.price} and hasn't been used.`;
+           } else {
+             reply += `I'd try to stick to an ₹150 avg meal to save more.`;
+           }
+      } else if (worstSub) {
+        reply = `I highly recommend canceling **${worstSub.name}** right now. It costs ₹${worstSub.price} and hasn't been used in over 15 days.`;
+      } else {
+        reply = `You don't have any obvious unused subscriptions. However, if you switch your highest expense to a Family Plan, you could save!`;
+      }
+    } else if (msg.includes("hello") || msg.includes("hi")) {
+      reply = "Hello! I am your AI concierge. Ask me how to save more or what you should cancel!";
+    }
+
+    res.json({ reply });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

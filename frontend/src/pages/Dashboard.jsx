@@ -1,6 +1,6 @@
 import React from 'react';
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { MousePointer2, TrendingUp, DollarSign, Wallet, ShieldCheck, ArrowRight, ShieldAlert, Zap, CreditCard } from 'lucide-react';
+import { BarChart, Bar, Cell, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Legend } from 'recharts';
+import { MousePointer2, TrendingUp, DollarSign, Wallet, ShieldCheck, ArrowRight, ShieldAlert, Zap, CreditCard, Utensils, Target } from 'lucide-react';
 
 const data = [
   { name: 'MON', value: 400 },
@@ -17,7 +17,12 @@ const Dashboard = ({ userId }) => {
     monthlySpend: 0,
     yearlyProjection: 0,
     pieChart: [],
-    totalSubs: 0
+    totalSubs: 0,
+    totalTxns: 0,
+    foodSpend: 0,
+    subPercent: 0,
+    healthScore: 100,
+    monthlyBudget: 0
   });
   const [loading, setLoading] = React.useState(true);
 
@@ -51,7 +56,7 @@ const Dashboard = ({ userId }) => {
             <h3>₹{stats.monthlySpend.toFixed(2)}</h3>
             <span className="trend positive">
               <TrendingUp size={14} />
-              Synced across {stats.totalSubs} services
+              Synced across {stats.totalSubs + stats.totalTxns} sources
             </span>
           </div>
           <div className="stat-visual">
@@ -75,21 +80,15 @@ const Dashboard = ({ userId }) => {
 
         <div className="stat-card">
           <div className="stat-info">
-            <p>Active Subscriptions</p>
-            <h3>{stats.totalSubs}</h3>
+            <p>Financial Intelligence</p>
+            <h3>{stats.subPercent.toFixed(1)}%</h3>
             <span className="trend">
-              Monitoring in real-time
+              Subscriptions % of Total Spend
             </span>
           </div>
           <div className="stat-visual">
             <div className="grid-placeholder">
-              {[...Array(9)].map((_, i) => (
-                <div 
-                  key={i} 
-                  className="dot" 
-                  style={{ background: i < stats.totalSubs ? '#6366f1' : '#e2e8f0' }} 
-                />
-              ))}
+              <span style={{ fontSize: '2rem', fontWeight: 'bold', color: '#cbd5e1' }}>%</span>
             </div>
           </div>
         </div>
@@ -97,26 +96,28 @@ const Dashboard = ({ userId }) => {
 
       <div className="main-grid">
         <div className="insight-section card">
-          <div className="badge badge-primary">AI ACTIVE INSIGHT</div>
-          <h2>You can save <span>$84.00</span> on Cloud Storage.</h2>
+          <div className="badge badge-primary">SPENDING INSIGHTS</div>
+          <h2>You spent <span>₹{stats.foodSpend.toFixed(2)}</span> on food delivery this month.</h2>
           <p className="description">
-            Our analysis shows overlapping usage between Dropbox and Google One. 
-            Consolidation could reduce your fixed costs by 15% immediately.
+            Your recurring subscriptions make up <strong>{stats.subPercent.toFixed(1)}%</strong> of your tracked expenses. 
+            {stats.monthlyBudget > 0 && stats.monthlySpend > stats.monthlyBudget ? (
+              <span className="text-danger"><br/>Warning: You are over your monthly budget of ₹{stats.monthlyBudget}.</span>
+            ) : null}
           </p>
           <div className="insight-actions">
-            <button className="primary-btn">Execute Optimization</button>
-            <button className="secondary-btn">Dismiss</button>
+            <button className="primary-btn">View All Expenses</button>
+            <button className="secondary-btn">Set Budget</button>
           </div>
 
           <div className="confidence-score">
-            <p>CONFIDENCE SCORE</p>
+            <p>SUBSCRIPTION HEALTH</p>
             <div className="score-header">
-              <span className="score-value">98%</span>
+              <span className="score-value">{stats.healthScore}/100</span>
             </div>
             <div className="progress-bar">
-              <div className="progress-fill" style={{ width: '98%' }} />
+              <div className="progress-fill" style={{ width: `${stats.healthScore}%`, background: stats.healthScore < 50 ? '#ef4444' : stats.healthScore < 80 ? '#f59e0b' : '#10b981' }} />
             </div>
-            <p className="score-text">Based on 12 months of transactional data and usage patterns.</p>
+            <p className="score-text">Based on your usage vs cost ratio.</p>
           </div>
         </div>
 
@@ -163,55 +164,81 @@ const Dashboard = ({ userId }) => {
           <div className="account-health">
             <p>ACCOUNT HEALTH</p>
             <div className="health-status">
-              <div className="status-indicator" />
-              <span>Optimum</span>
+              <div className="status-indicator" style={{ background: stats.healthScore < 50 ? '#ef4444' : stats.healthScore < 80 ? '#f59e0b' : '#10b981' }} />
+              <span>{stats.healthScore < 50 ? 'Critical' : stats.healthScore < 80 ? 'Warning' : 'Optimum'} {stats.healthScore}/100</span>
             </div>
             <p className="health-desc">
-              You've optimized 82% of your subscription portfolio this year.
+              {stats.healthScore < 50 ? 'Multiple wasteful subscriptions detected.' : stats.healthScore < 80 ? 'Some optimization recommended.' : 'You have an optimized portfolio!'}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="billing-cycle card">
-        <div className="section-header">
-          <h3>Upcoming Billing Cycle</h3>
-          <div className="chart-controls">
-            <button className="chart-btn">&lt;</button>
-            <button className="chart-btn">&gt;</button>
+      <div className="billing-cycle card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+        <div>
+          <div className="section-header">
+            <h3>Upcoming Billing Cycle</h3>
+          </div>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} 
+                />
+                <Tooltip cursor={{ fill: 'transparent' }} content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="custom-tooltip">
+                        <p>${payload[0].value}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }} />
+                <Bar dataKey="value" radius={[6, 6, 6, 6]} barSize={40}>
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.active ? '#6366f1' : '#e2e8f0'} 
+                      stroke={entry.active ? '#6366f1' : 'transparent'}
+                      strokeWidth={entry.active ? 2 : 0}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
-        <div className="chart-container">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-              <XAxis 
-                dataKey="name" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} 
-              />
-              <Tooltip cursor={{ fill: 'transparent' }} content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  return (
-                    <div className="custom-tooltip">
-                      <p>${payload[0].value}</p>
-                    </div>
-                  );
-                }
-                return null;
-              }} />
-              <Bar dataKey="value" radius={[6, 6, 6, 6]} barSize={40}>
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={entry.active ? '#6366f1' : '#e2e8f0'} 
-                    stroke={entry.active ? '#6366f1' : 'transparent'}
-                    strokeWidth={entry.active ? 2 : 0}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <div>
+          <div className="section-header">
+            <h3>Category Breakdown</h3>
+          </div>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie 
+                  data={stats.pieChart} 
+                  dataKey="value" 
+                  nameKey="name" 
+                  cx="50%" 
+                  cy="50%" 
+                  innerRadius={60} 
+                  outerRadius={80} 
+                  paddingAngle={5}
+                >
+                  {stats.pieChart.map((entry, index) => {
+                    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6'];
+                    return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                  })}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 

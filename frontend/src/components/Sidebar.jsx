@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, CreditCard, PieChart, Zap, Settings, HelpCircle, Scan, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, CreditCard, PieChart, Zap, Settings, HelpCircle, Scan, ChevronRight, Receipt } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 
 const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
@@ -7,6 +7,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'subscriptions', icon: CreditCard, label: 'Subscriptions' },
+    { id: 'transactions', icon: Receipt, label: 'Transactions' },
     { id: 'insights', icon: PieChart, label: 'Insights' },
     { id: 'automation', icon: Zap, label: 'Automation' },
     { id: 'settings', icon: Settings, label: 'Settings' },

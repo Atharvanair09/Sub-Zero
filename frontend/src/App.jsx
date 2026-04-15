@@ -5,8 +5,10 @@ import Dashboard from './pages/Dashboard';
 import Subscriptions from './pages/Subscriptions';
 import Activity from './pages/Activity';
 import Automation from './pages/Automation';
+import Transactions from './pages/Transactions';
 import Login from './pages/Login';
 import Onboarding from './components/Onboarding';
+import ChatAssistant from './components/ChatAssistant';
 import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
 import { Mail, CheckCircle2, Loader2, ShieldCheck, Plus, X } from 'lucide-react';
 
@@ -292,6 +294,8 @@ function AppContent() {
         return <Dashboard userId={userId} />;
       case 'subscriptions':
         return <Subscriptions userId={userId} />;
+      case 'transactions':
+        return <Transactions userId={userId} />;
       case 'insights':
         return <Activity userId={userId} />;
       case 'automation':
@@ -327,6 +331,8 @@ function AppContent() {
       <SignedOut>
         {showLogin && <Login onClose={() => setShowLogin(false)} />}
       </SignedOut>
+
+      <ChatAssistant userId={user?.id} />
 
       <style>{`
         .content-area {

@@ -185,24 +185,6 @@ const Automation = ({ userId }) => {
           </div>
         </div>
 
-        {/* <div className="tool-card card">
-          <div className="tool-header">
-            <div className="icon-box statement"><FileText size={24} /></div>
-            <div>
-              <h3>Bank Statement Sync</h3>
-              <p>Upload your CSV bank statement for bulk analysis.</p>
-            </div>
-          </div>
-          <div className="tool-body centered">
-            <div className="upload-placeholder">
-              <Upload size={48} className="text-muted mb-4" />
-              <p>Drag and drop bank statement (CSV/PDF)</p>
-              <span className="text-small">Supported: HDFC, ICICI, SBI, AXIS</span>
-            </div>
-            <button className="secondary-btn w-full mt-4">Browse Files</button>
-          </div>
-        </div> */}
-
         <div className="promo-card glass-dark">
           <div className="promo-content">
              <Zap className="mb-4" fill="white" size={32} />

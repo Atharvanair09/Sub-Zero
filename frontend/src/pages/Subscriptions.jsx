@@ -12,6 +12,7 @@ const Subscriptions = ({ userId }) => {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [cancelModal, setCancelModal] = useState({ isOpen: false, subId: null, subName: null, step: 0 });
 
   const fetchSubscriptions = async () => {
     try {
@@ -62,9 +63,14 @@ const Subscriptions = ({ userId }) => {
     }
   };
 
-  const handleCancel = async (id, name) => {
-    if (window.confirm(`Are you sure you want to cancel ${name}?`)) {
-      try {
+  const triggerCancel = (id, name) => {
+    setCancelModal({ isOpen: true, subId: id, subName: name, step: 1 });
+  };
+
+  const confirmCancel = async () => {
+    const { subId, subName } = cancelModal;
+    setCancelModal({ ...cancelModal, step: 3 }); // submitting state
+    try {
         const response = await fetch('http://localhost:5000/api/subscriptions/cancel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -72,13 +78,12 @@ const Subscriptions = ({ userId }) => {
         });
         const data = await response.json();
         if (data.success) {
-          alert(`Successfully cancelled ${name}`);
-          setSubscriptions(prev => prev.filter(sub => sub._id !== id));
+          setSubscriptions(prev => prev.filter(sub => sub._id !== subId));
+          setCancelModal({ isOpen: false, subId: null, subName: null, step: 0 });
         }
       } catch (err) {
         console.error("Cancel error:", err);
       }
-    }
   };
 
   const totalMonthlySpend = subscriptions.reduce((sum, sub) => sum + sub.price, 0);
@@ -188,9 +193,9 @@ const Subscriptions = ({ userId }) => {
                 </div>
                 <button 
                   className={`cancel-btn ${rec?.type === 'cancel' ? 'danger' : ''}`}
-                  onClick={() => handleCancel(sub._id, sub.name)}
+                  onClick={() => triggerCancel(sub._id, sub.name)}
                 >
-                  CANCEL SUBSCRIPTION
+                  {rec?.type === 'cancel' ? 'AUTO-CANCEL NOW' : 'CANCEL SUBSCRIPTION'}
                 </button>
               </div>
             </div>
@@ -224,7 +229,7 @@ const Subscriptions = ({ userId }) => {
             </ResponsiveContainer>
           </div>
           <div className="forecast-footer">
-            <p>Estimated Yearly Savings: <span>$504.00</span></p>
+            <p>Estimated Yearly Savings: <span>₹{(potentialSavings * 12).toFixed(2)}</span></p>
             <button className="view-report">View Detailed Report</button>
           </div>
         </div>
@@ -238,6 +243,68 @@ const Subscriptions = ({ userId }) => {
           <button className="action-btn">Activate Auto-Negotiate</button>
         </div>
       </div>
+
+      {cancelModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>Cancel {cancelModal.subName}</h2>
+              <button className="close-btn" onClick={() => setCancelModal({ ...cancelModal, isOpen: false })}><X size={20} /></button>
+            </div>
+            
+            {cancelModal.step === 1 && (
+              <div className="modal-body step-1">
+                <p>How would you like to proceed with the cancellation?</p>
+                <div className="cancel-options">
+                  <div className="cancel-option card" onClick={() => setCancelModal({ ...cancelModal, step: 2 })}>
+                    <div className="opt-icon"><Zap size={24} className="text-primary" /></div>
+                    <div className="opt-desc">
+                      <h4>1-Click Auto Cancel</h4>
+                      <p>We'll draft and send an email to support automatically.</p>
+                    </div>
+                    <ArrowRight size={18} className="text-muted" />
+                  </div>
+                  <div className="cancel-option card" onClick={() => window.open(`https://www.${cancelModal.subName.toLowerCase().replace(/\s/g, '')}.com`, '_blank')}>
+                    <div className="opt-icon"><ExternalLink size={24} className="text-muted" /></div>
+                    <div className="opt-desc">
+                      <h4>Manual Website</h4>
+                      <p>Go to the provider's billing portal yourself.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {cancelModal.step === 2 && (
+              <div className="modal-body step-2">
+                <p>Review the cancellation email draft:</p>
+                <div className="email-draft">
+                  <p><strong>To:</strong> support@{cancelModal.subName.toLowerCase().replace(/\s/g, '')}.com</p>
+                  <p><strong>Subject:</strong> Immediate Cancellation Request</p>
+                  <hr/>
+                  <p>
+                    Hello,<br/><br/>
+                    Please cancel my subscription for the account associated with this email address immediately. <br/>
+                    Do not renew my plan for the next billing cycle. Please confirm once this is done.<br/><br/>
+                    Thank you.
+                  </p>
+                </div>
+                <div className="modal-actions">
+                  <button className="secondary-btn" onClick={() => setCancelModal({ ...cancelModal, step: 1 })}>Back</button>
+                  <button className="primary-btn danger-bg" onClick={confirmCancel}>Send & Cancel Service</button>
+                </div>
+              </div>
+            )}
+
+            {cancelModal.step === 3 && (
+              <div className="modal-body step-3 text-center">
+                <div className="spinner"></div>
+                <p>Executing Webhooks & Sending Email...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <style>{`
         .subscriptions {
@@ -636,6 +703,44 @@ const Subscriptions = ({ userId }) => {
           font-weight: 700;
           font-size: 0.9rem;
         }
+
+        .modal-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-content {
+          background: white; border-radius: 1.5rem; width: 90%; max-width: 500px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); overflow: hidden;
+          animation: slideDown 0.3s ease-out;
+        }
+        .modal-header {
+          padding: 1.5rem 2rem; border-bottom: 1px solid var(--border);
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h2 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+        .close-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); }
+        .modal-body { padding: 2rem; }
+        .cancel-options { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
+        .cancel-option {
+          display: flex; align-items: center; gap: 1rem; padding: 1.25rem;
+          cursor: pointer; transition: all 0.2s; border: 2px solid transparent;
+        }
+        .cancel-option:hover { border-color: var(--primary); background: #f8fafc; }
+        .opt-icon { width: 48px; height: 48px; border-radius: 12px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; }
+        .opt-desc { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+        .opt-desc h4 { font-size: 1rem; font-weight: 700; margin: 0; }
+        .opt-desc p { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
+        .text-primary { color: var(--primary); }
+        .email-draft {
+          background: #f8fafc; border: 1px solid var(--border); border-radius: 1rem;
+          padding: 1.5rem; margin: 1.5rem 0; font-size: 0.9rem; line-height: 1.6;
+        }
+        .email-draft hr { border: none; border-top: 1px dashed #cbd5e1; margin: 1rem 0; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 1rem; }
+        .danger-bg { background: #ef4444; } .danger-bg:hover { background: #dc2626; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
