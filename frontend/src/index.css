@@ -18,6 +18,9 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --header-height: 80px;
+  --container-px: 2rem;
+  --mobile-px: 1rem;
 }
 
 * {
@@ -78,6 +81,20 @@ ul {
   margin-left: var(--sidebar-width);
   padding: 2rem;
   transition: all 0.3s ease;
+  min-height: 100vh;
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    margin-left: 0;
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .main-content {
+    padding: 1rem;
+  }
 }
 
 /* Card Styling */

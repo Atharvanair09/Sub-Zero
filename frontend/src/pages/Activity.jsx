@@ -252,6 +252,25 @@ const Activity = ({ userId }) => {
           right: 0;
         }
 
+        @media (max-width: 1024px) {
+          .page-header h1 {
+            font-size: 2.25rem;
+          }
+          .header-chips {
+            position: static;
+            margin-top: 1.5rem;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .header-chips {
+            flex-direction: column;
+          }
+          .summary-pill {
+            width: 100%;
+          }
+        }
+
         .summary-pill {
           background: white;
           padding: 1rem 1.5rem;
@@ -281,6 +300,12 @@ const Activity = ({ userId }) => {
           display: grid;
           grid-template-columns: 1fr 280px;
           gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+          .top-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         .health-card { padding: 2.5rem; }
@@ -398,9 +423,14 @@ const Activity = ({ userId }) => {
           box-shadow: var(--shadow-sm);
         }
 
+        .actions-card {
+          overflow-x: auto;
+        }
+
         .actions-table {
           width: 100%;
           border-collapse: collapse;
+          min-width: 800px;
         }
 
         .actions-table th {
@@ -411,6 +441,7 @@ const Activity = ({ userId }) => {
           letter-spacing: 0.1em;
           padding-bottom: 1rem;
           border-bottom: 1px solid var(--border);
+          white-space: nowrap;
         }
 
         .actions-table td {
@@ -462,6 +493,12 @@ const Activity = ({ userId }) => {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
           gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+          .bottom-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         .insight-card {

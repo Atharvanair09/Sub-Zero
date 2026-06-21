@@ -235,6 +235,14 @@ function AppContent() {
   const [showLogin, setShowLogin] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [onboarded, setOnboarded] = useState(true); // Default true to avoid flash
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Canonical userId is the MongoDB _id — same across web and mobile for the same email
+  const [canonicalUserId, setCanonicalUserId] = useState(null);
+
+  useEffect(() => {
+    // Close sidebar on tab change (mobile)
+    setIsSidebarOpen(false);
+  }, [activeTab]);
 
   useEffect(() => {
     // Open modal automatically if we just came back from auth
@@ -259,8 +267,12 @@ function AppContent() {
             })
           });
           const data = await response.json();
-          if (data.success && data.user && data.user.preferences) {
-            setOnboarded(data.user.preferences.onboarded);
+          if (data.success && data.user) {
+            // Store the canonical MongoDB _id as userId — same across web and mobile
+            setCanonicalUserId(data.user.userId || data.user._id?.toString());
+            if (data.user.preferences) {
+              setOnboarded(data.user.preferences.onboarded);
+            }
           }
         } catch (err) {
           console.error("Onboarding check failed", err);
@@ -273,22 +285,20 @@ function AppContent() {
   // Phase 2: NEW background sync on visit
   useEffect(() => {
     const backgroundSync = async () => {
-      if (isSignedIn && user) {
+      if (isSignedIn && canonicalUserId) {
         console.log("🚀 [Phase 2] Auto-Syncing transactions in background...");
         try {
-          // Trigger a background scan. We don't need to show a UI for this.
-          // It will update notifications if it finds new things.
-          await fetch(`http://localhost:5000/api/gmail/scan?userId=${user.id}`);
+          await fetch(`http://localhost:5000/api/gmail/scan?userId=${canonicalUserId}`);
         } catch (e) {
           console.warn("Background sync failed (likely missing tokens)");
         }
       }
     };
     backgroundSync();
-  }, [isSignedIn, user]);
+  }, [isSignedIn, canonicalUserId]);
 
   const renderContent = () => {
-    const userId = user?.id;
+    const userId = canonicalUserId; // Always the MongoDB _id
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard userId={userId} />;
@@ -306,22 +316,31 @@ function AppContent() {
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isSidebarOpen ? 'sidebar-open' : ''}`}>
+      {isSidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+      )}
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         onLoginClick={() => setShowLogin(true)} 
         onScanClick={() => setIsScanning(true)}
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
       />
       <main className="main-content">
-        <Header activeTab={activeTab} onLoginClick={() => setShowLogin(true)} />
+        <Header 
+          activeTab={activeTab} 
+          onLoginClick={() => setShowLogin(true)} 
+          toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
+        />
         <div className="content-area">
           {renderContent()}
         </div>
       </main>
 
       {isScanning && (
-        <GmailScanModal userId={user?.id} onClose={() => setIsScanning(false)} />
+        <GmailScanModal userId={canonicalUserId} onClose={() => setIsScanning(false)} />
       )}
 
       {isSignedIn && !onboarded && (
@@ -332,7 +351,7 @@ function AppContent() {
         {showLogin && <Login onClose={() => setShowLogin(false)} />}
       </SignedOut>
 
-      <ChatAssistant userId={user?.id} />
+      <ChatAssistant userId={canonicalUserId} />
 
       <style>{`
         .content-area {
@@ -340,14 +359,19 @@ function AppContent() {
           margin: 0 auto;
         }
 
-        @media (max-width: 1200px) {
+        .sidebar-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.4);
+          backdrop-filter: blur(4px);
+          z-index: 90;
+          animation: fadeIn 0.2s ease-out;
+        }
+
+        @media (max-width: 1024px) {
           .main-content {
             margin-left: 0;
             padding: 1.5rem;
-          }
-          
-          :global(.sidebar) {
-            transform: translateX(-100%);
           }
         }
       `}</style>

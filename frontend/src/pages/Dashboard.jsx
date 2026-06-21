@@ -212,7 +212,7 @@ const Dashboard = ({ userId }) => {
         </div>
       </div>
 
-      <div className="billing-cycle card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+      <div className="billing-cycle card responsive-billing">
         <div>
           <div className="section-header">
             <h3>Upcoming Billing Cycle</h3>
@@ -293,6 +293,18 @@ const Dashboard = ({ userId }) => {
           gap: 1.5rem;
         }
 
+        @media (max-width: 1024px) {
+          .stat-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        @media (max-width: 640px) {
+          .stat-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
         .stat-card {
           background: white;
           padding: 1.5rem;
@@ -314,6 +326,12 @@ const Dashboard = ({ userId }) => {
           font-size: 2rem;
           font-weight: 700;
           letter-spacing: -0.02em;
+        }
+
+        @media (max-width: 640px) {
+          .stat-info h3 {
+            font-size: 1.5rem;
+          }
         }
 
         .stat-info h3.highlight {
@@ -355,6 +373,12 @@ const Dashboard = ({ userId }) => {
           align-items: start;
         }
 
+        @media (max-width: 1200px) {
+          .main-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
         .insight-section {
           padding: 2.5rem;
           background: linear-gradient(to bottom right, #ffffff, #f9fafb);
@@ -369,6 +393,15 @@ const Dashboard = ({ userId }) => {
           line-height: 1.1;
           margin: 1.5rem 0;
           letter-spacing: -0.04em;
+        }
+
+        @media (max-width: 640px) {
+          .insight-section h2 {
+            font-size: 1.75rem;
+          }
+          .insight-section {
+            padding: 1.5rem;
+          }
         }
 
         .insight-section h2 span {
@@ -415,6 +448,14 @@ const Dashboard = ({ userId }) => {
           border-radius: 1rem;
           border: 1px solid var(--border);
           box-shadow: var(--shadow);
+        }
+
+        @media (max-width: 640px) {
+          .confidence-score {
+            position: static;
+            width: 100%;
+            margin-bottom: 1.5rem;
+          }
         }
 
         .confidence-score p:first-child {
@@ -595,6 +636,18 @@ const Dashboard = ({ userId }) => {
         
         .behavior-pill p { font-size: 0.75rem; font-weight: 600; line-height: 1.4; color: #334155; margin: 0; }
         
+        .responsive-billing {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+          .responsive-billing {
+            grid-template-columns: 1fr;
+          }
+        }
+
         @media (max-width: 768px) {
           .behavior-cards { grid-template-columns: 1fr; }
         }

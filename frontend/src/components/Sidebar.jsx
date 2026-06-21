@@ -1,8 +1,8 @@
 import React from 'react';
-import { LayoutDashboard, CreditCard, PieChart, Zap, Settings, HelpCircle, Scan, ChevronRight, Receipt } from 'lucide-react';
+import { LayoutDashboard, CreditCard, PieChart, Zap, Settings, HelpCircle, Scan, ChevronRight, Receipt, X } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 
-const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick, isOpen, setIsOpen }) => {
   const { user, isSignedIn } = useUser();
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -20,7 +20,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="logo-container">
         <div className="logo-icon">
           <Zap size={24} color="white" fill="white" />
@@ -29,6 +29,9 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
           <h1>SubZero</h1>
           <span>AI OPTIMIZER</span>
         </div>
+        <button className="mobile-close" onClick={() => setIsOpen(false)}>
+          <X size={24} />
+        </button>
       </div>
 
       <nav className="sidebar-nav">
@@ -49,14 +52,6 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
       </nav>
 
       <div className="sidebar-footer">
-        {/* <div className="scan-card">
-          <p>Efficiency Scan</p>
-          <button className="scan-button" onClick={onScanClick}>
-            <Scan size={16} />
-            <span>Scan for Savings</span>
-          </button>
-        </div> */}
-
         <button className="help-link">
           <HelpCircle size={20} />
           <span>Help Center</span>
@@ -81,8 +76,6 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
         </div>
       </div>
 
-
-
       <style>{`
         .sidebar {
           width: var(--sidebar-width);
@@ -96,6 +89,32 @@ const Sidebar = ({ activeTab, setActiveTab, onLoginClick, onScanClick }) => {
           flex-direction: column;
           padding: 2rem 1rem;
           z-index: 100;
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @media (max-width: 1024px) {
+          .sidebar {
+            transform: translateX(-100%);
+            box-shadow: 20px 0 25px -5px rgba(0, 0, 0, 0.1);
+          }
+          
+          .sidebar.open {
+            transform: translateX(0);
+          }
+        }
+
+        .mobile-close {
+          display: none;
+          margin-left: auto;
+          color: var(--text-muted);
+        }
+
+        @media (max-width: 1024px) {
+          .mobile-close {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
         }
 
         .logo-container {

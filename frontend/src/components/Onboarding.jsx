@@ -128,6 +128,11 @@ const Onboarding = ({ user, onComplete }) => {
         .bg-purple { background: #f5f3ff; }
         
         h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em; }
+        @media (max-width: 640px) {
+          h1 { font-size: 1.5rem; }
+          .onboarding-card { padding: 1.5rem; gap: 1.5rem; }
+          .budget-value { font-size: 2rem; }
+        }
         p { color: #64748b; line-height: 1.6; }
         
         .budget-slider { margin-top: 2rem; }

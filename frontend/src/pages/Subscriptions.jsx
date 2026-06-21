@@ -334,6 +334,16 @@ const Subscriptions = ({ userId }) => {
           gap: 2rem;
         }
 
+        @media (max-width: 1024px) {
+          .summary-row {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .page-header h1 {
+            font-size: 2.25rem;
+          }
+        }
+
         .analysis-text {
           font-size: 1.1rem;
           color: var(--text-muted);
@@ -349,6 +359,13 @@ const Subscriptions = ({ userId }) => {
         .summary-stats {
           display: flex;
           gap: 1.5rem;
+        }
+
+        @media (max-width: 640px) {
+          .summary-stats {
+            width: 100%;
+            flex-direction: column;
+          }
         }
 
         .mini-stat {
@@ -379,6 +396,12 @@ const Subscriptions = ({ userId }) => {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
           gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+          .subscription-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         .sub-card {
@@ -635,6 +658,12 @@ const Subscriptions = ({ userId }) => {
           display: grid;
           grid-template-columns: 1fr 340px;
           gap: 1.5rem;
+        }
+
+        @media (max-width: 1200px) {
+          .forecast-section {
+            grid-template-columns: 1fr;
+          }
         }
 
         .forecast-card {

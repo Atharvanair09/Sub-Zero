@@ -92,6 +92,23 @@ const NotificationList = ({ userId, onClose }) => {
           overflow: hidden;
           box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         }
+
+        @media (max-width: 640px) {
+          .notifications-dropdown {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            max-height: none;
+            border-radius: 0;
+          }
+          .notifications-scroll {
+            max-height: none;
+            height: calc(100vh - 60px);
+          }
+        }
         .dropdown-header {
           padding: 1.25rem;
           border-bottom: 1px solid var(--border);

@@ -328,6 +328,22 @@ const Automation = ({ userId }) => {
           gap: 1.5rem;
         }
 
+        @media (max-width: 640px) {
+          .txn-content {
+            flex-direction: column;
+            gap: 1rem;
+          }
+          .txn-main {
+            max-width: 100%;
+          }
+          .txn-amount-side {
+            align-items: flex-start;
+          }
+          .icon-box {
+            display: none;
+          }
+        }
+
         .txn-main {
           display: flex;
           flex-direction: column;

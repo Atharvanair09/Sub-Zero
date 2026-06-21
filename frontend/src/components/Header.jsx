@@ -1,9 +1,10 @@
 import React from 'react';
-import { Search, Bell, Plus, LayoutGrid, LogOut, X, CreditCard, DollarSign, Globe } from 'lucide-react';
+import { Search, Bell, Plus, LayoutGrid, LogOut, X, CreditCard, DollarSign, Globe, Menu } from 'lucide-react';
 import { useUser, SignOutButton, SignedIn, SignedOut } from '@clerk/clerk-react';
 import { useEffect, useState } from 'react';
 
 const SERVICE_PRESETS = [
+  // ... (preset data remains the same)
   { name: 'Netflix', prices: ['199', '499', '649'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=netflix.com', color: '#E50914' },
   { name: 'Spotify', prices: ['119', '149', '179'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=spotify.com', color: '#1DB954' },
   { name: 'Adobe CC', prices: ['638', '2394', '4230'], logo: 'https://www.google.com/s2/favicons?sz=128&domain=adobe.com', color: '#FA0F00' },
@@ -13,6 +14,7 @@ const SERVICE_PRESETS = [
 ];
 
 const AddSubscriptionModal = ({ userId, onClose }) => {
+  // ... (modal logic remains the same)
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -170,7 +172,7 @@ const AddSubscriptionModal = ({ userId, onClose }) => {
 
 import NotificationList from './NotificationList';
 
-const Header = ({ activeTab, onLoginClick }) => {
+const Header = ({ activeTab, onLoginClick, toggleSidebar }) => {
   const { user, isSignedIn } = useUser();
   const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, success, error
   const [showAddModal, setShowAddModal] = useState(false);
@@ -179,6 +181,7 @@ const Header = ({ activeTab, onLoginClick }) => {
 
   useEffect(() => {
     const syncUser = async () => {
+      // ... (sync logic remains the same)
       if (isSignedIn && user) {
         // Toggle unread status check
         fetch(`http://localhost:5000/api/notifications?userId=${user.id}`)
@@ -226,9 +229,14 @@ const Header = ({ activeTab, onLoginClick }) => {
 
   return (
     <header className="header">
-      <div className="search-bar">
-        <Search size={18} className="search-icon" />
-        <input type="text" placeholder="Search subscriptions..." />
+      <div className="header-left">
+        <button className="menu-toggle" onClick={toggleSidebar}>
+          <Menu size={24} />
+        </button>
+        <div className="search-bar">
+          <Search size={18} className="search-icon" />
+          <input type="text" placeholder="Search..." />
+        </div>
       </div>
 
       <nav className="header-nav">
@@ -305,6 +313,31 @@ const Header = ({ activeTab, onLoginClick }) => {
           background: transparent;
         }
 
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          flex: 1;
+        }
+
+        .menu-toggle {
+          display: none;
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          align-items: center;
+          justify-content: center;
+          background: white;
+          border: 1px solid var(--border);
+          color: var(--text-main);
+        }
+
+        @media (max-width: 1024px) {
+          .menu-toggle {
+            display: flex;
+          }
+        }
+
         .search-bar {
           display: flex;
           align-items: center;
@@ -313,10 +346,17 @@ const Header = ({ activeTab, onLoginClick }) => {
           padding: 0 1rem;
           height: 44px;
           border-radius: 12px;
-          flex: 0 1 320px;
+          max-width: 320px;
+          width: 100%;
           gap: 0.75rem;
           box-shadow: var(--shadow-sm);
           transition: all 0.2s;
+        }
+
+        @media (max-width: 640px) {
+          .search-bar {
+            max-width: none;
+          }
         }
 
         .search-bar:focus-within {
@@ -344,6 +384,12 @@ const Header = ({ activeTab, onLoginClick }) => {
           align-items: center;
           gap: 2.5rem;
           margin: 0 2rem;
+        }
+
+        @media (max-width: 1024px) {
+          .header-nav {
+            display: none;
+          }
         }
 
         .nav-link {
@@ -378,7 +424,7 @@ const Header = ({ activeTab, onLoginClick }) => {
         .header-actions {
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 0.75rem;
         }
 
         .add-button {
@@ -386,6 +432,7 @@ const Header = ({ activeTab, onLoginClick }) => {
           color: white;
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 0.5rem;
           padding: 0 1.25rem;
           height: 44px;
@@ -394,6 +441,19 @@ const Header = ({ activeTab, onLoginClick }) => {
           font-size: 0.9rem;
           box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
           white-space: nowrap;
+        }
+
+        @media (max-width: 640px) {
+          .add-button {
+            width: 44px;
+            padding: 0;
+          }
+          .add-button span {
+            display: none;
+          }
+          .divider-vertical {
+            display: none;
+          }
         }
 
         .add-button:hover {

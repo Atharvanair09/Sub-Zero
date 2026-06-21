@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "77131227371",
+    "project_id": "subzero-b4774",
+    "storage_bucket": "subzero-b4774.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:77131227371:android:01c36bf54f7155e2cf1eae",
+        "android_client_info": {
+          "package_name": "com.atharva.subzero"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "77131227371-86hdjjoi513m8bsdrq7vnnu5cvj2tb1f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.atharva.subzero",
+            "certificate_hash": "29e3b5846392de976bc5313d6fe5337578ad1f08"
+          }
+        },
+        {
+          "client_id": "77131227371-l86n8hai3u7ivnrs6j172rjkl3adh86a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCobO4hSLdCsCPnr6gDhVkGY5eyupGVitw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "77131227371-l86n8hai3u7ivnrs6j172rjkl3adh86a.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

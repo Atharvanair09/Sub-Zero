@@ -155,7 +155,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
   const { userId } = req.query;
   try {
     const subs = await Subscription.find({ userId });
-    const user = await User.findOne({ clerkId: userId });
+    const user = await User.findById(userId);
     
     // Get recent transactions to accurately calculate monthly spend
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -327,35 +327,95 @@ app.get("/api/recommendations", async (req, res) => {
 });
 
 app.post("/api/users/sync", async (req, res) => {
-  const { clerkId, email, fullName, imageUrl } = req.body;
-  
-  console.log(`[Backend Checkpoint] Received sync request for user: ${clerkId}`);
+  // Accept either clerkId (web) or googleId (mobile) — both are optional
+  const { clerkId, googleId, email, fullName, imageUrl } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ success: false, error: "email is required" });
+  }
+
+  console.log(`[Backend Checkpoint] Sync request — email: ${email}, clerkId: ${clerkId || 'none'}, googleId: ${googleId || 'none'}`);
 
   try {
-    let user = await User.findOneAndUpdate(
-      { clerkId },
-      { 
-        email, 
-        fullName, 
-        imageUrl, 
-        lastLogin: new Date() 
-      },
-      { upsert: true, new: true }
-    );
+    // --- Step 1: Find by email (canonical identity) ---
+    let user = await User.findOne({ email });
 
-    console.log(`✅ [Backend Checkpoint] User ${user.email} saved/updated successfully`);
-    res.status(200).json({ success: true, user });
+    if (user) {
+      // --- Step 2: User exists — link new provider IDs if not already linked ---
+      const updates = { lastLogin: new Date() };
+
+      if (fullName && !user.fullName) updates.fullName = fullName;
+      if (imageUrl && !user.imageUrl) updates.imageUrl = imageUrl;
+
+      if (clerkId) {
+        updates["providerIds.clerk"] = clerkId;
+        updates.clerkId = clerkId; // keep backward-compat field in sync
+      }
+      if (googleId) {
+        updates["providerIds.google"] = googleId;
+      }
+
+      user = await User.findByIdAndUpdate(user._id, { $set: updates }, { new: true });
+      console.log(`✅ [Sync] Existing user found & updated: ${user.email} (_id: ${user._id})`);
+
+    } else {
+      // --- Step 3: No user with this email — create one ---
+      user = await User.create({
+        email,
+        fullName: fullName || "",
+        imageUrl: imageUrl || "",
+        clerkId: clerkId || null,
+        providerIds: {
+          clerk:  clerkId  || null,
+          google: googleId || null,
+        },
+        lastLogin: new Date(),
+      });
+      console.log(`✅ [Sync] New user created: ${user.email} (_id: ${user._id})`);
+    }
+
+    // --- Step 4: Detect & merge stale duplicate accounts ---
+    // A stale duplicate is a DIFFERENT user document with the same provider ID
+    // (can happen from old data before this migration)
+    let staleUserId = null;
+    if (clerkId) {
+      const stale = await User.findOne({ clerkId, _id: { $ne: user._id } });
+      if (stale) staleUserId = stale._id.toString();
+    }
+    if (!staleUserId && googleId) {
+      const stale = await User.findOne({ "providerIds.google": googleId, _id: { $ne: user._id } });
+      if (stale) staleUserId = stale._id.toString();
+    }
+
+    if (staleUserId) {
+      const canonicalId = user._id.toString();
+      console.log(`⚠️ [Sync] Merging stale user ${staleUserId} → ${canonicalId}`);
+      await Promise.all([
+        Subscription.updateMany({ userId: staleUserId }, { $set: { userId: canonicalId } }),
+        Transaction.updateMany(  { userId: staleUserId }, { $set: { userId: canonicalId } }),
+        Notification.updateMany( { userId: staleUserId }, { $set: { userId: canonicalId } }),
+      ]);
+      await User.findByIdAndDelete(staleUserId);
+      console.log(`✅ [Sync] Merge complete. Stale user ${staleUserId} deleted.`);
+    }
+
+    // Return the canonical userId as MongoDB _id string
+    res.status(200).json({ success: true, user: { ...user.toObject(), userId: user._id.toString() } });
+
   } catch (error) {
-    console.error(`❌ [Backend Checkpoint] Error saving user:`, error.message);
+    console.error(`❌ [Sync] Error:`, error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+
+
 app.patch("/api/users/preferences", async (req, res) => {
   const { userId, preferences } = req.body;
   try {
-    const user = await User.findOneAndUpdate(
-      { clerkId: userId },
+    // userId is now always the canonical MongoDB _id
+    const user = await User.findByIdAndUpdate(
+      userId,
       { $set: { preferences } },
       { new: true }
     );
@@ -448,12 +508,12 @@ app.get("/api/auth/google/url", (req, res) => {
 });
 
 app.get("/api/auth/google/callback", async (req, res) => {
-  const { code, state } = req.query; // state is the userId
+  const { code, state } = req.query; // state is the canonical userId (_id)
   try {
     const { tokens } = await oauth2Client.getToken(code);
     
     if (state) {
-      await User.findOneAndUpdate({ clerkId: state }, { googleTokens: tokens });
+      await User.findByIdAndUpdate(state, { googleTokens: tokens });
     }
 
     res.redirect("http://localhost:5173/?scan=true");
@@ -466,7 +526,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
 app.get("/api/gmail/scan", async (req, res) => {
   const { userId } = req.query;
   try {
-    const user = await User.findOne({ clerkId: userId });
+    const user = await User.findById(userId);
     
     if (!user || !user.googleTokens) {
       return res.status(401).json({ error: "Not authenticated with Google" });
@@ -574,7 +634,7 @@ app.get("/api/gmail/scan", async (req, res) => {
     console.error("Gmail scan error", error);
     if (error.message && (error.message.includes("No refresh token") || error.message.includes("invalid_grant"))) {
       if (userId) {
-         await User.findOneAndUpdate({ clerkId: userId }, { googleTokens: null });
+         await User.findByIdAndUpdate(userId, { googleTokens: null });
       }
       return res.status(401).json({ error: "Google authentication expired. Please re-authenticate." });
     }

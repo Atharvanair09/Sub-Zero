@@ -171,6 +171,21 @@ const Transactions = ({ userId }) => {
           margin-bottom: 2rem;
         }
 
+        @media (max-width: 768px) {
+          .header-main {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1.5rem;
+          }
+          .page-header h1 {
+            font-size: 2.25rem;
+          }
+          .export-btn {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+
         .page-header h1 {
           font-size: 3rem;
           font-weight: 700;
@@ -207,6 +222,18 @@ const Transactions = ({ userId }) => {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+          .metrics-row {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        @media (max-width: 640px) {
+          .metrics-row {
+            grid-template-columns: 1fr;
+          }
         }
 
         .metric-card {
@@ -246,7 +273,14 @@ const Transactions = ({ userId }) => {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 2rem;
+          gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+          .table-controls {
+            flex-direction: column;
+            align-items: stretch;
+          }
         }
 
         .search-box {
@@ -275,6 +309,12 @@ const Transactions = ({ userId }) => {
           gap: 1rem;
         }
 
+        @media (max-width: 640px) {
+          .filter-group {
+            flex-direction: column;
+          }
+        }
+
         .filter-select, .date-picker {
           display: flex;
           align-items: center;
@@ -286,6 +326,12 @@ const Transactions = ({ userId }) => {
           font-size: 0.85rem;
           font-weight: 600;
           color: #1e293b;
+        }
+
+        @media (max-width: 640px) {
+          .filter-select, .date-picker {
+            width: 100%;
+          }
         }
 
         .filter-select select {
@@ -300,13 +346,14 @@ const Transactions = ({ userId }) => {
 
         .transactions-table-container {
           padding: 0;
-          overflow: hidden;
+          overflow-x: auto;
         }
 
         .transactions-table {
           width: 100%;
           border-collapse: collapse;
           text-align: left;
+          min-width: 800px;
         }
 
         .transactions-table th {
@@ -318,12 +365,14 @@ const Transactions = ({ userId }) => {
           text-transform: uppercase;
           letter-spacing: 0.05em;
           border-bottom: 1px solid #e2e8f0;
+          white-space: nowrap;
         }
 
         .transactions-table td {
           padding: 1.25rem 1.5rem;
           font-size: 0.9rem;
           border-bottom: 1px solid #f1f5f9;
+          white-space: nowrap;
         }
 
         .recipient-info {
