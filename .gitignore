@@ -43,3 +43,5 @@ pnpm-debug.log*
 *.sln
 *.sw?
 .history/
+
+/mobile/subzero/android/app/google-services.json
