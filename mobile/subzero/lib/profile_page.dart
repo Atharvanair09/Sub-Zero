@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'auth_service.dart';
 import 'login_screen.dart';
 import 'home_page.dart';
+import 'goals_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -216,22 +217,6 @@ class ProfilePage extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.black, width: 2)),
-          color: Colors.white,
-        ),
-        height: 70,
-        child: Row(
-          children: [
-            _buildBottomNavItem(context, Icons.home_filled, 'HOME', false, const HomePage()),
-            _buildBottomNavItem(context, Icons.history, 'HISTORY', false, null),
-            _buildBottomNavItem(context, Icons.adjust, 'GOALS', false, null),
-            _buildBottomNavItem(context, Icons.auto_awesome_outlined, 'AI', false, null),
-            _buildBottomNavItem(context, Icons.person, 'PROFILE', true, null),
-          ],
-        ),
-      ),
     );
   }
 
@@ -382,42 +367,4 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNavItem(BuildContext context, IconData icon, String label, bool isSelected, Widget? targetPage) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (!isSelected && targetPage != null) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => targetPage),
-            );
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0044FF) : Colors.white,
-            border: const Border(right: BorderSide(color: Colors.black, width: 2)),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? Colors.white : Colors.black,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: isSelected ? Colors.white : Colors.black,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

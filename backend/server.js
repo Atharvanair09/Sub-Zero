@@ -52,7 +52,7 @@ mongoose.connect(MONGODB_URI)
 
 // Routes
 app.post("/api/subscriptions", async (req, res) => {
-  const { userId, name, price, plan, logo, color, category, billingCycle, nextBillingDate, externalId } = req.body;
+  const { userId, name, price, plan, logo, color, category, billingCycle, nextBillingDate, externalId, type } = req.body;
   
   try {
     const isTransaction = ['Food', 'Travel', 'Bank Transaction', 'Shopping'].includes(category) || 
@@ -66,7 +66,8 @@ app.post("/api/subscriptions", async (req, res) => {
          amount: parsedPrice,
          category: category || 'Bank Transaction',
          logo: logo || `https://www.google.com/s2/favicons?sz=128&domain=${name.toLowerCase().replace(/\s/g, '')}.com`,
-         externalId
+         externalId,
+         type: type || 'debit'
        });
        await newTxn.save();
        return res.json({ success: true, transaction: newTxn });
@@ -524,7 +525,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
 });
 
 app.get("/api/gmail/scan", async (req, res) => {
-  const { userId } = req.query;
+  const { userId, autoSave } = req.query;
   try {
     const user = await User.findById(userId);
     
@@ -536,7 +537,7 @@ app.get("/api/gmail/scan", async (req, res) => {
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const response = await gmail.users.messages.list({
       userId: "me",
-      q: "subject:(debited OR spent OR \"alert for\" OR txn OR \"payment confirmed\" OR \"transaction alert\") \"bank\" OR \"account\" OR \"a/c\" OR HDFC OR ICICI OR SBI OR AXIS OR Kotak",
+      q: "subject:(debited OR spent OR \"alert for\" OR txn OR \"payment confirmed\" OR \"transaction alert\" OR credited OR received OR deposited OR refunded OR added) \"bank\" OR \"account\" OR \"a/c\" OR HDFC OR ICICI OR SBI OR AXIS OR Kotak",
       maxResults: 50,
     });
 
@@ -554,6 +555,13 @@ app.get("/api/gmail/scan", async (req, res) => {
       const snippet = details.data.snippet.toLowerCase();
       const subject = details.data.payload.headers.find(h => h.name === 'Subject')?.value.toLowerCase() || "";
       const textToScan = subject + " " + snippet;
+
+      let type = 'debit';
+      if (/\b(credited|credit|received|refunded|deposited|refund|income|inflow)\b/i.test(textToScan)) {
+        type = 'credit';
+      } else if (/\b(debited|debit|spent|withdrawn|sent|paid|payment|outflow)\b/i.test(textToScan)) {
+        type = 'debit';
+      }
 
       // Expanded list of vendors
       const vendors = [
@@ -591,8 +599,8 @@ app.get("/api/gmail/scan", async (req, res) => {
 
       // Dynamic Extraction for Banks (Fallback)
       if (!vendorName) {
-        // Look for patterns like "at [VENDOR]", "to [VENDOR]", "spent on [VENDOR]"
-        const merchantMatch = textForRegex.match(/(?:at|to|on|toward|towards)\s+([A-Z0-0\s\.]+?)(?:\s+using|\s+on|\s+at|\s+branch|\s+for|\s+card|\.|\n|$)/i);
+        // Look for patterns like "at [VENDOR]", "to [VENDOR]", "spent on [VENDOR]", "from [VENDOR]", "by [VENDOR]"
+        const merchantMatch = textForRegex.match(/(?:at|to|on|toward|towards|from|by)\s+([A-Z0-9\s\.]+?)(?:\s+using|\s+on|\s+at|\s+branch|\s+for|\s+card|\.|\n|$)/i);
         if (merchantMatch && merchantMatch[1]) {
            const potential = merchantMatch[1].trim();
            // Filter out common noise
@@ -601,6 +609,20 @@ app.get("/api/gmail/scan", async (req, res) => {
               category = "Bank Transaction";
            }
         }
+      }
+
+      if (!vendorName) {
+        // Look for bank name from the email snippet
+        const bankMatch = textForRegex.match(/\b(hdfc|icici|sbi|axis|kotak|state bank|bank)\b/i);
+        if (bankMatch) {
+          vendorName = bankMatch[1].toUpperCase();
+          category = "Bank Transaction";
+        }
+      }
+
+      if (!vendorName) {
+        vendorName = type === 'credit' ? 'REFUND/CREDIT' : 'DEBIT TRANSACTION';
+        category = "Bank Transaction";
       }
 
       if (vendorName) {
@@ -614,17 +636,34 @@ app.get("/api/gmail/scan", async (req, res) => {
         const alreadyExistsInSub = await Subscription.findOne({ userId, externalId: msg.id });
         const alreadyExistsInTxn = await Transaction.findOne({ userId, externalId: msg.id });
 
-        if (!alreadyExistsInSub && !alreadyExistsInTxn && !detected.find(d => d.name === vendorName)) {
-           detected.push({
-             name: vendorName,
-             price: price.replace(',', ''),
-             plan: 'Detected Alert',
-             category: category,
-             logo: `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
-             detectedFrom: details.data.payload.headers.find(h => h.name === 'Subject')?.value || "Bank Alert",
-             date: parseInt(details.data.internalDate),
-             externalId: msg.id
-           });
+        if (!alreadyExistsInSub && !alreadyExistsInTxn) {
+           if (autoSave === 'true') {
+             const newTxn = new Transaction({
+               userId,
+               name: vendorName,
+               amount: parseFloat(price.replace(',', '')),
+               category: category,
+               logo: `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
+               externalId: msg.id,
+               type: type,
+               date: new Date(parseInt(details.data.internalDate))
+             });
+             await newTxn.save();
+           }
+
+           if (!detected.find(d => d.name === vendorName)) {
+             detected.push({
+               name: vendorName,
+               price: price.replace(',', ''),
+               plan: 'Detected Alert',
+               category: category,
+               logo: `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
+               detectedFrom: details.data.payload.headers.find(h => h.name === 'Subject')?.value || "Bank Alert",
+               date: parseInt(details.data.internalDate),
+               externalId: msg.id,
+               type: type
+             });
+           }
         }
       }
     }

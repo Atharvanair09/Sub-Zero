@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'onboarding_screen.dart';
 import 'home_page.dart';
+import 'goals_page.dart';
+import 'budget_overview_page.dart';
+import 'financial_health_page.dart';
+import 'profile_page.dart';
+import 'custom_navbar.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Load any persisted auth session before rendering
-  await AuthService.instance.loadFromStorage();
   runApp(const MyApp());
 }
 
@@ -15,60 +18,86 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // If we have a stored userId the user is already signed in
-    final isSignedIn = AuthService.instance.isSignedIn;
-
     return MaterialApp(
       title: 'SubZero',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: isSignedIn ? const HomePage() : const OnboardingScreen(),
+      home: const _AuthGate(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+/// Waits for [AuthService.loadFromStorage()] to complete, then routes
+/// to [MainLayout] if a session exists or [OnboardingScreen] if not.
+class _AuthGate extends StatefulWidget {
+  const _AuthGate();
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<_AuthGate> createState() => _AuthGateState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AuthGateState extends State<_AuthGate> {
+  late final Future<void> _authFuture =
+      AuthService.instance.loadFromStorage();
 
-  void _incrementCounter() {
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _authFuture,
+      builder: (context, snapshot) {
+        // Still loading — show a blank screen (or a splash)
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            backgroundColor: Color(0xFFF7F7F7),
+            body: Center(child: CircularProgressIndicator(color: Colors.black)),
+          );
+        }
+
+        // Storage loaded — route based on session
+        return AuthService.instance.isSignedIn
+            ? const MainLayout()
+            : const OnboardingScreen();
+      },
+    );
+  }
+}
+
+class MainLayout extends StatefulWidget {
+  const MainLayout({super.key});
+
+  @override
+  State<MainLayout> createState() => _MainLayoutState();
+}
+
+class _MainLayoutState extends State<MainLayout> {
+  int _currentIndex = 0;
+
+  final List<Widget> _pages = [
+    const HomePage(),
+    const GoalsPage(),
+    const BudgetOverviewPage(),
+    const FinancialHealthPage(),
+    const ProfilePage(),
+  ];
+
+  void _onItemTapped(int index) {
     setState(() {
-      _counter++;
+      _currentIndex = index;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _pages,
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      bottomNavigationBar: CustomNavBar(
+        currentIndex: _currentIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

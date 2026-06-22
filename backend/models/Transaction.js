@@ -37,6 +37,11 @@ const transactionSchema = new mongoose.Schema({
   },
   logo: {
     type: String
+  },
+  type: {
+    type: String,
+    enum: ['credit', 'debit'],
+    default: 'debit'
   }
 }, {
   timestamps: true

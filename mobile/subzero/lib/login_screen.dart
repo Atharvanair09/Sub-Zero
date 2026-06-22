@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Sync with backend using email as the canonical key.
       // We send googleId (the Google sub ID) so the backend can link it
       // to any existing account that was created from web (Clerk).
-      final String backendUrl = 'http://192.168.1.7:5000/api/users/sync';
+      final String backendUrl = 'https://sub-zero-50le.onrender.com/api/users/sync';
 
       final response = await http.post(
         Uri.parse(backendUrl),

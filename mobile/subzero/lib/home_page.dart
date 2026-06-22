@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'auth_service.dart';
 import 'profile_page.dart';
+import 'goals_page.dart';
+import 'add_transaction_page.dart';
+import 'budget_overview_page.dart';
+import 'financial_health_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -88,7 +92,7 @@ class HomePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '\$142,527.90',
+                      '₹14,102.23',
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.w900,
                         fontSize: 40,
@@ -130,10 +134,17 @@ class HomePage extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _buildActionButton(
-                      icon: Icons.add,
-                      label: 'ADD',
-                      color: const Color(0xFF9AFF00),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const AddTransactionPage()),
+                        );
+                      },
+                      child: _buildActionButton(
+                        icon: Icons.add,
+                        label: 'ADD',
+                        color: const Color(0xFF9AFF00),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -141,15 +152,19 @@ class HomePage extends StatelessWidget {
                     child: _buildActionButton(
                       icon: Icons.qr_code_scanner,
                       label: 'SCAN',
-                      color: const Color(0xFFE5E5FF),
+                      color: Colors.yellow,
+                      textColor: Colors.black,
+                      iconColor: Colors.black,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildActionButton(
                       icon: Icons.payments_outlined,
-                      label: 'PAY',
-                      color: Colors.white,
+                      label: 'EMAIL',
+                      color: Colors.red,
+                      textColor: Colors.white,
+                      iconColor: Colors.white,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -366,22 +381,6 @@ class HomePage extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.black, width: 2)),
-          color: Colors.white,
-        ),
-        height: 70,
-        child: Row(
-          children: [
-            _buildBottomNavItem(context, Icons.home_filled, 'HOME', true, null),
-            _buildBottomNavItem(context, Icons.history, 'HISTORY', false, null),
-            _buildBottomNavItem(context, Icons.adjust, 'GOALS', false, null),
-            _buildBottomNavItem(context, Icons.auto_awesome_outlined, 'AI', false, null),
-            _buildBottomNavItem(context, Icons.person_outline, 'PROFILE', false, const ProfilePage()),
-          ],
-        ),
-      ),
     );
   }
 
@@ -434,7 +433,7 @@ class HomePage extends StatelessWidget {
             style: GoogleFonts.inter(
               color: textColor,
               fontWeight: FontWeight.w900,
-              fontSize: 10,
+              fontSize: 14,
             ),
           ),
         ],
@@ -525,42 +524,4 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNavItem(BuildContext context, IconData icon, String label, bool isSelected, Widget? targetPage) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (!isSelected && targetPage != null) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => targetPage),
-            );
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF0044FF) : Colors.white,
-            border: const Border(right: BorderSide(color: Colors.black, width: 2)),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? Colors.white : Colors.black,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: isSelected ? Colors.white : Colors.black,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
