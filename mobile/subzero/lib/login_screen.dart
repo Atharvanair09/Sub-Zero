@@ -4,7 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import 'onboarding_screen.dart'; // for OffsetShadowBox
-import 'home_page.dart';
+import 'main.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           if (mounted) {
             Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const HomePage()),
+              MaterialPageRoute(builder: (_) => const MainLayout()),
               (Route<dynamic> route) => false,
             );
           }

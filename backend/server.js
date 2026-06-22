@@ -509,8 +509,18 @@ app.get("/api/auth/google/url", (req, res) => {
 });
 
 app.get("/api/auth/google/callback", async (req, res) => {
-  const { code, state } = req.query; // state is the canonical userId (_id)
+  const { code, state, error, error_description } = req.query; // state is the canonical userId (_id)
   console.log(`[Google OAuth Callback] Code received: ${code ? "YES" : "NO"}, State (UserId): ${state}`);
+  
+  if (error || error_description) {
+    console.error(`[Google OAuth Callback] Google returned an OAuth error: ${error} - ${error_description}`);
+  }
+
+  if (!code) {
+    console.error("[Google OAuth Callback] Error: No code received in query parameters. Query params:", req.query);
+    return res.status(400).send(`Authentication failed: ${error_description || error || "Missing authorization code"}`);
+  }
+
   try {
     const { tokens } = await oauth2Client.getToken(code);
     
@@ -534,8 +544,8 @@ app.get("/api/auth/google/callback", async (req, res) => {
     const redirectUrl = `${frontendUrl}/?scan=true`;
     console.log(`[Google OAuth Callback] Redirecting user to: ${redirectUrl}`);
     res.redirect(redirectUrl);
-  } catch (error) {
-    console.error("[Google OAuth Callback] Error exchanging code for tokens:", error);
+  } catch (err) {
+    console.error("[Google OAuth Callback] Error exchanging code for tokens:", err);
     res.status(500).send("Authentication failed");
   }
 });
