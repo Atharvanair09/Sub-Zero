@@ -510,30 +510,61 @@ app.get("/api/auth/google/url", (req, res) => {
 
 app.get("/api/auth/google/callback", async (req, res) => {
   const { code, state } = req.query; // state is the canonical userId (_id)
+  console.log(`[Google OAuth Callback] Code received: ${code ? "YES" : "NO"}, State (UserId): ${state}`);
   try {
     const { tokens } = await oauth2Client.getToken(code);
     
-    if (state) {
-      await User.findByIdAndUpdate(state, { googleTokens: tokens });
+    console.log("[Google OAuth Callback] Exchanged tokens characteristics:", {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : "N/A",
+      scopes: tokens.scope
+    });
+
+    if (!tokens.refresh_token) {
+      console.warn("[Google OAuth Callback] WARNING: No refresh_token returned from Google. If this is a subsequent login, Google will not return a refresh_token unless prompt=consent is enforced.");
     }
 
-    res.redirect("http://localhost:5173/?scan=true");
+    if (state) {
+      await User.findByIdAndUpdate(state, { googleTokens: tokens });
+      console.log(`[Google OAuth Callback] Successfully saved new Google tokens for userId: ${state}`);
+    }
+
+    const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").trim();
+    const redirectUrl = `${frontendUrl}/?scan=true`;
+    console.log(`[Google OAuth Callback] Redirecting user to: ${redirectUrl}`);
+    res.redirect(redirectUrl);
   } catch (error) {
-    console.error("Error exchanging code for tokens", error);
+    console.error("[Google OAuth Callback] Error exchanging code for tokens:", error);
     res.status(500).send("Authentication failed");
   }
 });
 
 app.get("/api/gmail/scan", async (req, res) => {
   const { userId, autoSave } = req.query;
+  console.log(`[Gmail Scan] Initiated scan for userId: ${userId}, autoSave: ${autoSave}`);
   try {
     const user = await User.findById(userId);
     
-    if (!user || !user.googleTokens) {
+    if (!user) {
+      console.error(`[Gmail Scan] Scan failed: User with ID ${userId} not found in database.`);
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.googleTokens) {
+      console.warn(`[Gmail Scan] Scan failed: No googleTokens stored in database for user ${userId}.`);
       return res.status(401).json({ error: "Not authenticated with Google" });
     }
 
+    console.log(`[Gmail Scan] Retrieved tokens for user ${userId} from DB:`, {
+      hasAccessToken: !!user.googleTokens.access_token,
+      hasRefreshToken: !!user.googleTokens.refresh_token,
+      expiryDate: user.googleTokens.expiry_date ? new Date(user.googleTokens.expiry_date).toISOString() : "N/A",
+    });
+
     oauth2Client.setCredentials(user.googleTokens);
+    console.log("[Gmail Scan] Credentials set on oauth2Client successfully.");
+
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const response = await gmail.users.messages.list({
       userId: "me",
@@ -608,7 +639,7 @@ app.get("/api/gmail/scan", async (req, res) => {
            // Filter out common noise
            if (potential.length > 2 && !['your', 'a', 'the', 'rs'].includes(potential.toLowerCase())) {
               vendorName = potential.split(' ')[0].toUpperCase(); // Take first word for simplicity
-              category = "Bank Transaction";
+               category = "Bank Transaction";
            }
         }
       }
@@ -674,7 +705,7 @@ app.get("/api/gmail/scan", async (req, res) => {
 
     res.json({ success: true, detected });
   } catch (error) {
-    console.error("Gmail scan error", error);
+    console.error("[Gmail Scan] Scan failed with error:", error);
     let responseDataStr = "";
     if (error.response?.data) {
       try {
@@ -693,9 +724,17 @@ app.get("/api/gmail/scan", async (req, res) => {
       error.toString()
     ].filter(Boolean).join(" ").toLowerCase();
 
+    console.error(`[Gmail Scan] Full error log: ${errString}`);
+
     if (errString.includes("no refresh token") || errString.includes("invalid_grant")) {
+      console.warn(`[Gmail Scan] Detected invalid_grant or missing refresh token for user ${userId}. Clearing stored credentials from DB.`);
       if (userId) {
-         await User.findByIdAndUpdate(userId, { googleTokens: null });
+         try {
+           await User.findByIdAndUpdate(userId, { googleTokens: null });
+           console.log(`[Gmail Scan] Successfully cleared googleTokens for user ${userId}.`);
+         } catch (dbErr) {
+           console.error(`[Gmail Scan] Failed to clear googleTokens for user ${userId}:`, dbErr);
+         }
       }
       return res.status(401).json({ error: "Google authentication expired. Please re-authenticate." });
     }
