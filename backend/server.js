@@ -675,7 +675,16 @@ app.get("/api/gmail/scan", async (req, res) => {
     res.json({ success: true, detected });
   } catch (error) {
     console.error("Gmail scan error", error);
-    if (error.message && (error.message.includes("No refresh token") || error.message.includes("invalid_grant"))) {
+    const errString = [
+      error.message,
+      error.stack,
+      error.code,
+      error.response?.data?.error,
+      error.response?.data?.error_description,
+      JSON.stringify(error)
+    ].filter(Boolean).join(" ").toLowerCase();
+
+    if (errString.includes("no refresh token") || errString.includes("invalid_grant")) {
       if (userId) {
          await User.findByIdAndUpdate(userId, { googleTokens: null });
       }
