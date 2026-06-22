@@ -342,10 +342,28 @@ class _GoalsPageState extends State<GoalsPage> {
                 const SizedBox(height: 32),
                 
                 if (_isLoading)
-                  const Center(
+                  Center(
                     child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40.0),
-                      child: CircularProgressIndicator(color: Colors.black),
+                      padding: const EdgeInsets.symmetric(vertical: 60.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(
+                            color: Colors.black,
+                            strokeWidth: 4.0,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'LOADING TRANSACTIONS HISTORY...',
+                            style: GoogleFonts.inter(
+                              color: Colors.black,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 else if (groupedTxns.isEmpty)

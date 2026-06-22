@@ -563,6 +563,8 @@ app.get("/api/gmail/scan", async (req, res) => {
         type = 'debit';
       }
 
+      console.log(`[Gmail Scan] Parsing email ID: ${msg.id} | Subject: "${subject}" | Detected Type: ${type}`);
+
       // Expanded list of vendors
       const vendors = [
         { name: 'Netflix', domain: 'netflix.com', category: 'OTT' },
@@ -628,6 +630,8 @@ app.get("/api/gmail/scan", async (req, res) => {
       if (vendorName) {
         const priceMatch = textForRegex.match(/(?:₹|\$|rs\.?|usd|inr)\s?(\d+(?:[.,]\d{2})?)/i);
         const price = priceMatch ? priceMatch[1] : "199";
+
+        console.log(`[Gmail Scan] Parsed Alert details - Vendor: ${vendorName} | Price: ${price} | Category: ${category} | Type: ${type}`);
 
         // Filter out if already added as a subscription or transaction
         const Subscription = mongoose.model('Subscription');
