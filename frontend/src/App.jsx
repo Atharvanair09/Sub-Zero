@@ -36,11 +36,20 @@ const GmailScanModal = ({ userId, onClose }) => {
   };
 
   const runRealScan = async () => {
+    // Don't attempt a scan if we don't yet have a resolved userId
+    if (!userId) {
+      console.warn('[Gmail Scan] runRealScan called before userId was resolved — aborting.');
+      setStep('intro');
+      return;
+    }
     setStep('scanning');
     try {
       const response = await fetch(`http://localhost:5000/api/gmail/scan?userId=${userId}`);
       const data = await response.json();
-      if (data.success) {
+      if (data.skipped) {
+        // User has not connected Gmail yet — bring them back to the connect prompt
+        setStep('intro');
+      } else if (data.success) {
         setDetected(data.detected);
         setStep('results');
       } else {
@@ -238,6 +247,7 @@ function AppContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Canonical userId is the MongoDB _id — same across web and mobile for the same email
   const [canonicalUserId, setCanonicalUserId] = useState(null);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
 
   useEffect(() => {
     // Close sidebar on tab change (mobile)
@@ -270,6 +280,8 @@ function AppContent() {
           if (data.success && data.user) {
             // Store the canonical MongoDB _id as userId — same across web and mobile
             setCanonicalUserId(data.user.userId || data.user._id?.toString());
+            // Use the explicit gmailConnected flag — the authoritative source of truth
+            setIsGoogleConnected(!!(data.user.gmailConnected && data.user.googleTokens));
             if (data.user.preferences) {
               setOnboarded(data.user.preferences.onboarded);
             }
@@ -282,20 +294,26 @@ function AppContent() {
     checkOnboarding();
   }, [isSignedIn, user]);
 
-  // Phase 2: NEW background sync on visit
+  // Phase 2: Background sync on visit — only when Gmail is confirmed connected
   useEffect(() => {
     const backgroundSync = async () => {
-      if (isSignedIn && canonicalUserId) {
+      if (isSignedIn && canonicalUserId && isGoogleConnected) {
         console.log("🚀 [Phase 2] Auto-Syncing transactions in background...");
         try {
-          await fetch(`http://localhost:5000/api/gmail/scan?userId=${canonicalUserId}`);
+          const res = await fetch(`http://localhost:5000/api/gmail/scan?userId=${canonicalUserId}`);
+          const data = await res.json();
+          if (data.skipped) {
+            // Tokens were cleared server-side (e.g. invalid_grant) — reflect that in UI
+            console.warn("[Phase 2] Background sync skipped: Gmail not connected or tokens missing.");
+            setIsGoogleConnected(false);
+          }
         } catch (e) {
-          console.warn("Background sync failed (likely missing tokens)");
+          console.warn("Background sync failed (network or server error)", e);
         }
       }
     };
     backgroundSync();
-  }, [isSignedIn, canonicalUserId]);
+  }, [isSignedIn, canonicalUserId, isGoogleConnected]);
 
   const renderContent = () => {
     const userId = canonicalUserId; // Always the MongoDB _id
@@ -309,7 +327,7 @@ function AppContent() {
       case 'insights':
         return <Activity userId={userId} />;
       case 'automation':
-        return <Automation userId={userId} />;
+        return <Automation userId={userId} isGoogleConnected={isGoogleConnected} setIsGoogleConnected={setIsGoogleConnected} />;
       default:
         return <Dashboard userId={userId} />;
     }

@@ -28,7 +28,21 @@ const UserSchema = new mongoose.Schema({
     notificationsEnabled: { type: Boolean, default: true },
     onboarded: { type: Boolean, default: false }
   },
-  googleTokens: { type: Object, default: null }
+
+  // Whether the user has explicitly connected their Google/Gmail account
+  gmailConnected: { type: Boolean, default: false },
+
+  // Structured Google OAuth tokens — null until the user completes Gmail OAuth
+  googleTokens: {
+    type: new mongoose.Schema({
+      access_token:  { type: String, default: null },
+      refresh_token: { type: String, default: null },
+      expiry_date:   { type: Number, default: null },
+      token_type:    { type: String, default: null },
+      scope:         { type: String, default: null },
+    }, { _id: false }),
+    default: null,
+  },
 }, { timestamps: true });
 
 // Index for fast provider-ID lookups

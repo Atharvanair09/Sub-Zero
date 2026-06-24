@@ -7,6 +7,7 @@ import 'budget_overview_page.dart';
 import 'financial_health_page.dart';
 import 'profile_page.dart';
 import 'custom_navbar.dart';
+import 'splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +25,38 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const _AuthGate(),
+      home: const SplashGate(),
+    );
+  }
+}
+
+class SplashGate extends StatefulWidget {
+  const SplashGate({super.key});
+
+  @override
+  State<SplashGate> createState() => _SplashGateState();
+}
+
+class _SplashGateState extends State<SplashGate> {
+  bool _splashCompleted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        AbsorbPointer(
+          absorbing: !_splashCompleted,
+          child: const _AuthGate(),
+        ),
+        if (!_splashCompleted)
+          SplashScreen(
+            onComplete: () {
+              setState(() {
+                _splashCompleted = true;
+              });
+            },
+          ),
+      ],
     );
   }
 }

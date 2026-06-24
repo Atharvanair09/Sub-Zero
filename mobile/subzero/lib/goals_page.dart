@@ -106,9 +106,19 @@ class _GoalsPageState extends State<GoalsPage> {
     try {
       final response = await _apiCall('/api/gmail/scan?userId=$userId&autoSave=true');
       if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true) {
+
+        if (data['skipped'] == true) {
+          // User has not connected Gmail yet — don't treat this as an error
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('GMAIL NOT CONNECTED. OPEN THE WEB APP TO LINK YOUR ACCOUNT.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else if (data['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('EMAIL SYNC COMPLETED SUCCESSFULLY')),
           );
@@ -118,8 +128,12 @@ class _GoalsPageState extends State<GoalsPage> {
           );
         }
       } else if (response.statusCode == 401) {
+        // Token expired — ask user to re-authenticate on web
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('GOOGLE AUTH EXPIRED. PLEASE RE-AUTHENTICATE ON WEB.')),
+          const SnackBar(
+            content: Text('GOOGLE AUTH EXPIRED. PLEASE RE-AUTHENTICATE ON WEB APP.'),
+            duration: Duration(seconds: 5),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

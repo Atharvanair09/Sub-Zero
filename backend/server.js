@@ -370,6 +370,8 @@ app.post("/api/users/sync", async (req, res) => {
           clerk:  clerkId  || null,
           google: googleId || null,
         },
+        gmailConnected: false, // Explicitly false until user completes Gmail OAuth
+        googleTokens: null,
         lastLogin: new Date(),
       });
       console.log(`✅ [Sync] New user created: ${user.email} (_id: ${user._id})`);
@@ -401,7 +403,15 @@ app.post("/api/users/sync", async (req, res) => {
     }
 
     // Return the canonical userId as MongoDB _id string
-    res.status(200).json({ success: true, user: { ...user.toObject(), userId: user._id.toString() } });
+    // Also expose gmailConnected so the frontend can gate Gmail features immediately
+    res.status(200).json({
+      success: true,
+      user: {
+        ...user.toObject(),
+        userId: user._id.toString(),
+        gmailConnected: user.gmailConnected ?? false,
+      },
+    });
 
   } catch (error) {
     console.error(`❌ [Sync] Error:`, error.message);
@@ -536,7 +546,10 @@ app.get("/api/auth/google/callback", async (req, res) => {
     }
 
     if (state) {
-      await User.findByIdAndUpdate(state, { googleTokens: tokens });
+      await User.findByIdAndUpdate(state, {
+        googleTokens: tokens,
+        gmailConnected: true, // Mark Gmail as connected once we have valid tokens
+      });
       console.log(`[Google OAuth Callback] Successfully saved new Google tokens for userId: ${state}`);
     }
 
@@ -555,15 +568,18 @@ app.get("/api/gmail/scan", async (req, res) => {
   console.log(`[Gmail Scan] Initiated scan for userId: ${userId}, autoSave: ${autoSave}`);
   try {
     const user = await User.findById(userId);
-    
+
     if (!user) {
       console.error(`[Gmail Scan] Scan failed: User with ID ${userId} not found in database.`);
       return res.status(404).json({ error: "User not found" });
     }
 
-    if (!user.googleTokens) {
-      console.warn(`[Gmail Scan] Scan failed: No googleTokens stored in database for user ${userId}.`);
-      return res.status(401).json({ error: "Not authenticated with Google" });
+    // Gate: user must have explicitly connected Gmail AND have a valid access token.
+    // Return 200 with skipped:true (not 401) so callers can distinguish
+    // "not connected yet" from "token expired" — avoiding noise in logs and UI.
+    if (!user.gmailConnected || !user.googleTokens?.access_token) {
+      console.log(`[Gmail Scan] Skipped: user ${userId} has not connected Gmail (gmailConnected=${user.gmailConnected}).`);
+      return res.status(200).json({ success: true, detected: [], skipped: true });
     }
 
     console.log(`[Gmail Scan] Retrieved tokens for user ${userId} from DB:`, {
@@ -740,8 +756,9 @@ app.get("/api/gmail/scan", async (req, res) => {
       console.warn(`[Gmail Scan] Detected invalid_grant or missing refresh token for user ${userId}. Clearing stored credentials from DB.`);
       if (userId) {
          try {
-           await User.findByIdAndUpdate(userId, { googleTokens: null });
-           console.log(`[Gmail Scan] Successfully cleared googleTokens for user ${userId}.`);
+           // Clear both the tokens and the connected flag so the UI re-prompts OAuth
+           await User.findByIdAndUpdate(userId, { googleTokens: null, gmailConnected: false });
+           console.log(`[Gmail Scan] Successfully cleared googleTokens and gmailConnected for user ${userId}.`);
          } catch (dbErr) {
            console.error(`[Gmail Scan] Failed to clear googleTokens for user ${userId}:`, dbErr);
          }

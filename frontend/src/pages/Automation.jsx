@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Zap, MessageSquare, FileText, CheckCircle, Upload, ArrowRight, Mail, Loader2, Plus, X } from 'lucide-react';
 
-const Automation = ({ userId }) => {
+const Automation = ({ userId, isGoogleConnected, setIsGoogleConnected }) => {
   const [results, setResults] = useState(null);
   const [isParsing, setIsParsing] = useState(false);
   const [addedIndices, setAddedIndices] = useState(new Set());
@@ -17,6 +17,7 @@ const Automation = ({ userId }) => {
       const response = await fetch(`http://localhost:5000/api/gmail/scan?userId=${userId}`);
       
       if (response.status === 401) {
+        if (setIsGoogleConnected) setIsGoogleConnected(false);
         // Not authenticated with Google, get auth URL
         const authRes = await fetch(`http://localhost:5000/api/auth/google/url?userId=${userId}`);
         const { url } = await authRes.json();
@@ -26,6 +27,7 @@ const Automation = ({ userId }) => {
 
       const data = await response.json();
       if (data.success) {
+        if (setIsGoogleConnected) setIsGoogleConnected(true);
         setResults(data.detected);
       } else {
         alert("Failed to sync transactions.");
@@ -40,10 +42,10 @@ const Automation = ({ userId }) => {
 
   // Phase 2: NEW Auto-fetch on mount
   React.useEffect(() => {
-    if (userId && results === null) {
+    if (userId && results === null && isGoogleConnected) {
       handleEmailSync();
     }
-  }, [userId]);
+  }, [userId, isGoogleConnected]);
 
   const startEditing = (item, index) => {
     setEditingIndex(index);
@@ -99,7 +101,14 @@ const Automation = ({ userId }) => {
           </div>
           
           <div className="tool-body">
-            {isParsing ? (
+            {!isGoogleConnected ? (
+              <div className="empty-sync-state text-center py-6">
+                <p className="text-muted mb-4">Connect your Gmail account to securely parse and track transaction alerts from your bank.</p>
+                <button className="add-bank-btn w-full justify-center" onClick={handleEmailSync}>
+                  <Mail size={16} /> Connect Gmail Account
+                </button>
+              </div>
+            ) : isParsing ? (
               <div className="modern-loading-container">
                 <div className="radar-scanner">
                   <div className="radar-circle"></div>
