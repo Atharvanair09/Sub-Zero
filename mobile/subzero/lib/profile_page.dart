@@ -5,10 +5,16 @@ import 'auth_service.dart';
 import 'login_screen.dart';
 import 'home_page.dart';
 import 'goals_page.dart';
+import 'gmail_connect_page.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
   Future<void> _handleLogout(BuildContext context) async {
     // Sign out from Google and clear the canonical session
     await GoogleSignIn().signOut();
@@ -22,12 +28,24 @@ class ProfilePage extends StatelessWidget {
   }
 
 
+  /// Opens the Gmail connect flow and refreshes UI when it returns.
+  Future<void> _openGmailConnect(BuildContext context) async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const GmailConnectPage()),
+    );
+    // If the user successfully connected Gmail, rebuild so the tile updates
+    if (result == true && mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth    = AuthService.instance;
     final name    = (auth.name ?? 'USER').toUpperCase();
     final email   = auth.email ?? '';
     final photo   = auth.photoUrl;
+    final gmailConnected = auth.gmailConnected;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -152,6 +170,85 @@ class ProfilePage extends StatelessWidget {
                   _buildListItem(title: 'LINKED ACCOUNTS'),
                   const SizedBox(height: 8),
                   _buildListItem(title: 'DOCUMENT VAULT'),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // GMAIL INTEGRATION Section
+              _buildSectionCard(
+                title: 'GMAIL\nINTEGRATION',
+                children: [
+                  GestureDetector(
+                    onTap: gmailConnected ? null : () => _openGmailConnect(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: gmailConnected ? const Color(0xFF9AFF00) : Colors.white,
+                        border: Border.all(color: Colors.black, width: 2),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            gmailConnected ? Icons.check_circle : Icons.mail_outline,
+                            size: 20,
+                            color: Colors.black,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  gmailConnected ? 'GMAIL CONNECTED' : 'CONNECT GMAIL',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                Text(
+                                  gmailConnected
+                                      ? 'Auto-detecting transactions'
+                                      : 'Tap to enable auto-detection',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (!gmailConnected)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              color: Colors.black,
+                              child: Text(
+                                'CONNECT',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              color: Colors.black,
+                              child: Text(
+                                'ACTIVE',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),

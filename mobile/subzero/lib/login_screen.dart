@@ -50,11 +50,14 @@ class _LoginScreenState extends State<LoginScreen> {
         if (data['success'] == true && data['user'] != null) {
           // Persist the canonical MongoDB _id — same userId the web uses
           final canonicalId = data['user']['userId'] ?? data['user']['_id'];
+          final bool gmailConnected = data['user']['gmailConnected'] == true;
+
           await AuthService.instance.saveSession(
-            userId:   canonicalId.toString(),
-            email:    googleUser.email,
-            name:     googleUser.displayName,
-            photoUrl: googleUser.photoUrl,
+            userId:         canonicalId.toString(),
+            email:          googleUser.email,
+            name:           googleUser.displayName,
+            photoUrl:       googleUser.photoUrl,
+            gmailConnected: gmailConnected,
           );
 
           if (mounted) {

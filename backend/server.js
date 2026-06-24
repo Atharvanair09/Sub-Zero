@@ -436,6 +436,28 @@ app.patch("/api/users/preferences", async (req, res) => {
   }
 });
 
+// Returns the live gmailConnected state for a user — used by mobile after
+// returning from the Gmail OAuth browser flow to refresh its local state.
+app.get("/api/users/gmail-status", async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+    return res.status(400).json({ success: false, error: "userId is required" });
+  }
+  try {
+    const user = await User.findById(userId).select("gmailConnected googleTokens");
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+    res.json({
+      success: true,
+      gmailConnected: user.gmailConnected ?? false,
+      hasTokens: !!(user.googleTokens?.access_token),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // --- Smart Notifications Routes ---
 
 app.get("/api/notifications", async (req, res) => {

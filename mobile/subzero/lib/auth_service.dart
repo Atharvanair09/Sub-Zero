@@ -9,31 +9,35 @@ class AuthService {
   AuthService._internal();
   static final AuthService instance = AuthService._internal();
 
-  static const _keyUserId    = 'canonical_user_id';
-  static const _keyUserEmail = 'user_email';
-  static const _keyUserName  = 'user_name';
-  static const _keyUserPhoto = 'user_photo_url';
+  static const _keyUserId       = 'canonical_user_id';
+  static const _keyUserEmail    = 'user_email';
+  static const _keyUserName     = 'user_name';
+  static const _keyUserPhoto    = 'user_photo_url';
+  static const _keyGmailConnected = 'gmail_connected';
 
   // ── In-memory cache ──────────────────────────────────────────────────────
   String? _userId;
   String? _email;
   String? _name;
   String? _photoUrl;
+  bool    _gmailConnected = false;
 
   // ── Getters ───────────────────────────────────────────────────────────────
-  String? get userId    => _userId;
-  String? get email     => _email;
-  String? get name      => _name;
-  String? get photoUrl  => _photoUrl;
-  bool    get isSignedIn => _userId != null && _userId!.isNotEmpty;
+  String? get userId         => _userId;
+  String? get email          => _email;
+  String? get name           => _name;
+  String? get photoUrl       => _photoUrl;
+  bool    get gmailConnected => _gmailConnected;
+  bool    get isSignedIn     => _userId != null && _userId!.isNotEmpty;
 
   // ── Load persisted session on app start ───────────────────────────────────
   Future<void> loadFromStorage() async {
     final prefs = await SharedPreferences.getInstance();
-    _userId   = prefs.getString(_keyUserId);
-    _email    = prefs.getString(_keyUserEmail);
-    _name     = prefs.getString(_keyUserName);
-    _photoUrl = prefs.getString(_keyUserPhoto);
+    _userId          = prefs.getString(_keyUserId);
+    _email           = prefs.getString(_keyUserEmail);
+    _name            = prefs.getString(_keyUserName);
+    _photoUrl        = prefs.getString(_keyUserPhoto);
+    _gmailConnected  = prefs.getBool(_keyGmailConnected) ?? false;
   }
 
   // ── Called after a successful backend sync ────────────────────────────────
@@ -42,30 +46,42 @@ class AuthService {
     required String email,
     String? name,
     String? photoUrl,
+    bool gmailConnected = false,
   }) async {
-    _userId   = userId;
-    _email    = email;
-    _name     = name;
-    _photoUrl = photoUrl;
+    _userId          = userId;
+    _email           = email;
+    _name            = name;
+    _photoUrl        = photoUrl;
+    _gmailConnected  = gmailConnected;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyUserId, userId);
     await prefs.setString(_keyUserEmail, email);
     if (name     != null) await prefs.setString(_keyUserName,  name);
     if (photoUrl != null) await prefs.setString(_keyUserPhoto, photoUrl);
+    await prefs.setBool(_keyGmailConnected, gmailConnected);
+  }
+
+  // ── Update only the gmailConnected flag (called after OAuth return) ────────
+  Future<void> setGmailConnected(bool connected) async {
+    _gmailConnected = connected;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyGmailConnected, connected);
   }
 
   // ── Clear session on sign-out ─────────────────────────────────────────────
   Future<void> clearSession() async {
-    _userId   = null;
-    _email    = null;
-    _name     = null;
-    _photoUrl = null;
+    _userId          = null;
+    _email           = null;
+    _name            = null;
+    _photoUrl        = null;
+    _gmailConnected  = false;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyUserId);
     await prefs.remove(_keyUserEmail);
     await prefs.remove(_keyUserName);
     await prefs.remove(_keyUserPhoto);
+    await prefs.remove(_keyGmailConnected);
   }
 }
