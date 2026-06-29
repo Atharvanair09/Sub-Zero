@@ -657,18 +657,18 @@ app.get("/api/gmail/scan", async (req, res) => {
       let category = "Bank Transaction";
       let domain = "hdfcbank.com";
 
-      // 1. Check for UPI/VPA info (Info: UPI-MERCHANT or VPA-MERCHANT)
-      const infoMatch = textToScan.match(/info:\s*(?:upi|vpa)-([a-z0-9@.-]+)/i);
-      if (infoMatch) {
-         vendorName = infoMatch[1].split('@')[0].replace(/[^a-z0-9]/gi, ' ').trim().toUpperCase();
+      // 1. Check for explicit Sender (common in HDFC credit emails)
+      const senderMatch = textToScan.match(/sender:\s*([a-z0-9\s]+?)\s*(?:\(vpa|\(upi|-|$)/i);
+      if (senderMatch) {
+         vendorName = senderMatch[1].trim().toUpperCase();
       }
 
-      // 1.5. Check for Sender in credit emails
-      if (type === 'credit' && !vendorName) {
-         const senderMatch = textToScan.match(/sender\s*:\s*([a-z0-9\s]+?)(?:[.,-]|on|info|$)/i);
-         if (senderMatch && senderMatch[1].trim().length > 2) {
-             vendorName = senderMatch[1].trim().toUpperCase();
-         }
+      // 2. Check for UPI/VPA info (Info: UPI-MERCHANT or VPA-MERCHANT)
+      if (!vendorName) {
+        const infoMatch = textToScan.match(/info:\s*(?:upi|vpa)-([a-z0-9@.-]+)/i);
+        if (infoMatch) {
+           vendorName = infoMatch[1].split('@')[0].replace(/[^a-z0-9]/gi, ' ').trim().toUpperCase();
+        }
       }
 
       // 2. Check for "at [Merchant]" or "to [Merchant]" pattern
