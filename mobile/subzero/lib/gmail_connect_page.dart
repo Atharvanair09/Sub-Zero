@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'auth_service.dart';
 
-/// Guides the user through the Gmail OAuth consent flow.
+/// Guides the user through the Gmail OAuth consent flow natively in the app.
 ///
 /// Flow:
 /// 1. Tap "Connect Gmail" → fetch auth URL from backend
@@ -36,93 +37,43 @@ class _GmailConnectPageState extends State<GmailConnectPage> {
     super.dispose();
   }
 
-  // ── Step 1: Fetch auth URL and open browser ───────────────────────────────
+  // ── Step 1: Request Gmail Scopes Natively ───────────────────────────────
   Future<void> _startOAuthFlow() async {
-    final userId = AuthService.instance.userId;
-    if (userId == null || userId.isEmpty) {
-      setState(() {
-        _state = _ConnectState.error;
-        _errorMessage = 'User session not found. Please sign in again.';
-      });
-      return;
-    }
-
     setState(() {
       _state = _ConnectState.launching;
       _errorMessage = null;
     });
 
     try {
-      final resp = await http.get(
-        Uri.parse('$_baseUrl/api/auth/google/url?userId=$userId'),
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
       );
-
-      if (resp.statusCode != 200) {
-        throw Exception('Failed to get auth URL (${resp.statusCode})');
+      
+      // Try to sign in or request additional scopes if already signed in
+      final GoogleSignInAccount? account = await googleSignIn.signIn();
+      
+      if (account == null) {
+        setState(() {
+          _state = _ConnectState.idle;
+          _errorMessage = 'Sign in aborted';
+        });
+        return;
       }
 
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final url = data['url'] as String?;
-      if (url == null || url.isEmpty) {
-        throw Exception('Backend returned an empty auth URL');
+      // Mark as connected in our local session
+      await AuthService.instance.setGmailConnected(true);
+
+      if (mounted) {
+        setState(() => _state = _ConnectState.success);
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (mounted) Navigator.of(context).pop(true);
       }
-
-      final uri = Uri.parse(url);
-      if (!await canLaunchUrl(uri)) {
-        throw Exception('Cannot open browser on this device');
-      }
-
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-      // Start polling after the browser opens
-      setState(() => _state = _ConnectState.waiting);
-      _startPolling();
     } catch (e) {
       setState(() {
         _state = _ConnectState.error;
         _errorMessage = e.toString();
       });
     }
-  }
-
-  // ── Step 2: Poll backend until gmailConnected=true ────────────────────────
-  void _startPolling() {
-    _pollCount = 0;
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      _pollCount++;
-      if (_pollCount > _maxPolls) {
-        _pollTimer?.cancel();
-        if (mounted) {
-          setState(() {
-            _state = _ConnectState.error;
-            _errorMessage = 'Timed out waiting for Gmail authorization. Please try again.';
-          });
-        }
-        return;
-      }
-
-      try {
-        final userId = AuthService.instance.userId!;
-        final resp = await http.get(
-          Uri.parse('$_baseUrl/api/users/gmail-status?userId=$userId'),
-        );
-
-        if (resp.statusCode == 200) {
-          final data = jsonDecode(resp.body) as Map<String, dynamic>;
-          if (data['gmailConnected'] == true) {
-            _pollTimer?.cancel();
-            await AuthService.instance.setGmailConnected(true);
-            if (mounted) {
-              setState(() => _state = _ConnectState.success);
-              await Future.delayed(const Duration(milliseconds: 1500));
-              if (mounted) Navigator.of(context).pop(true); // signal success to caller
-            }
-          }
-        }
-      } catch (_) {
-        // Network blip — keep polling silently
-      }
-    });
   }
 
   // ── UI ────────────────────────────────────────────────────────────────────

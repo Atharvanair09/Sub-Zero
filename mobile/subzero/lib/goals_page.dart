@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'auth_service.dart';
 
 class GoalsPage extends StatefulWidget {
@@ -104,7 +105,21 @@ class _GoalsPageState extends State<GoalsPage> {
     }
 
     try {
-      final response = await _apiCall('/api/gmail/scan?userId=$userId&autoSave=true');
+      String accessTokenQuery = '';
+      if (AuthService.instance.gmailConnected) {
+        final GoogleSignIn googleSignIn = GoogleSignIn(
+          scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+        );
+        final account = await googleSignIn.signInSilently();
+        if (account != null) {
+          final auth = await account.authentication;
+          if (auth.accessToken != null) {
+            accessTokenQuery = '&accessToken=${auth.accessToken}';
+          }
+        }
+      }
+
+      final response = await _apiCall('/api/gmail/scan?userId=$userId&autoSave=true$accessTokenQuery');
       if (!mounted) return;
 
       if (response.statusCode == 200) {

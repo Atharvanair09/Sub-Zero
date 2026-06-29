@@ -586,7 +586,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
 });
 
 app.get("/api/gmail/scan", async (req, res) => {
-  const { userId, autoSave } = req.query;
+  const { userId, autoSave, accessToken } = req.query;
   console.log(`[Gmail Scan] Initiated scan for userId: ${userId}, autoSave: ${autoSave}`);
   try {
     const user = await User.findById(userId);
@@ -599,19 +599,28 @@ app.get("/api/gmail/scan", async (req, res) => {
     // Gate: user must have explicitly connected Gmail AND have a valid access token.
     // Return 200 with skipped:true (not 401) so callers can distinguish
     // "not connected yet" from "token expired" — avoiding noise in logs and UI.
-    if (!user.gmailConnected || !user.googleTokens?.access_token) {
+    if (!accessToken && (!user.gmailConnected || !user.googleTokens?.access_token)) {
       console.log(`[Gmail Scan] Skipped: user ${userId} has not connected Gmail (gmailConnected=${user.gmailConnected}).`);
       return res.status(200).json({ success: true, detected: [], skipped: true });
     }
 
-    console.log(`[Gmail Scan] Retrieved tokens for user ${userId} from DB:`, {
-      hasAccessToken: !!user.googleTokens.access_token,
-      hasRefreshToken: !!user.googleTokens.refresh_token,
-      expiryDate: user.googleTokens.expiry_date ? new Date(user.googleTokens.expiry_date).toISOString() : "N/A",
-    });
+    if (accessToken) {
+      oauth2Client.setCredentials({ access_token: accessToken });
+      console.log("[Gmail Scan] Credentials set on oauth2Client from query accessToken successfully.");
+      
+      if (!user.gmailConnected) {
+        await User.findByIdAndUpdate(userId, { gmailConnected: true });
+      }
+    } else {
+      console.log(`[Gmail Scan] Retrieved tokens for user ${userId} from DB:`, {
+        hasAccessToken: !!user.googleTokens.access_token,
+        hasRefreshToken: !!user.googleTokens.refresh_token,
+        expiryDate: user.googleTokens.expiry_date ? new Date(user.googleTokens.expiry_date).toISOString() : "N/A",
+      });
 
-    oauth2Client.setCredentials(user.googleTokens);
-    console.log("[Gmail Scan] Credentials set on oauth2Client successfully.");
+      oauth2Client.setCredentials(user.googleTokens);
+      console.log("[Gmail Scan] Credentials set on oauth2Client successfully.");
+    }
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const response = await gmail.users.messages.list({
