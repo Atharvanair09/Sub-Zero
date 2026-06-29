@@ -663,6 +663,14 @@ app.get("/api/gmail/scan", async (req, res) => {
          vendorName = infoMatch[1].split('@')[0].replace(/[^a-z0-9]/gi, ' ').trim().toUpperCase();
       }
 
+      // 1.5. Check for Sender in credit emails
+      if (type === 'credit' && !vendorName) {
+         const senderMatch = textToScan.match(/sender\s*:\s*([a-z0-9\s]+?)(?:[.,-]|on|info|$)/i);
+         if (senderMatch && senderMatch[1].trim().length > 2) {
+             vendorName = senderMatch[1].trim().toUpperCase();
+         }
+      }
+
       // 2. Check for "at [Merchant]" or "to [Merchant]" pattern
       if (!vendorName) {
          const atMatch = textToScan.match(/(?:at|to|toward|towards)\s+([a-z0-9\s*]+?)(?:\s+on|\s+using|\s+via|\s+for|\s+card|\.|-|$)/i);
