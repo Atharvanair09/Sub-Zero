@@ -440,9 +440,9 @@ class _GoalsPageState extends State<GoalsPage> {
                           final bool isCredit = type == 'credit';
                           final String sign = isCredit ? '+' : '-';
                           
-                          final Color bgColor = _getTransactionColor(id);
-                          final Color titleColor = _getTitleColor(bgColor);
-                          final Color amountColor = isCredit ? const Color(0xFF3B8000) : const Color(0xFFFF3B30);
+                          final Color bgColor = isCredit ? const Color(0xFF9AFF00) : const Color(0xFFFF4C4C);
+                          final Color titleColor = Colors.black;
+                          final Color amountColor = Colors.black;
                           final IconData icon = _getIconForCategory(t['category'] ?? '');
                           
                           return _buildTransactionCard(

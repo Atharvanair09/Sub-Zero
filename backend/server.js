@@ -625,7 +625,7 @@ app.get("/api/gmail/scan", async (req, res) => {
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const response = await gmail.users.messages.list({
       userId: "me",
-      q: "subject:(debited OR spent OR \"alert for\" OR txn OR \"payment confirmed\" OR \"transaction alert\" OR credited OR received OR deposited OR refunded OR added) \"bank\" OR \"account\" OR \"a/c\" OR HDFC OR ICICI OR SBI OR AXIS OR Kotak",
+      q: `from:${process.env.BANK_ALERT_EMAIL}`,
       maxResults: 50,
     });
 
@@ -645,79 +645,43 @@ app.get("/api/gmail/scan", async (req, res) => {
       const textToScan = subject + " " + snippet;
 
       let type = 'debit';
-      if (/\b(credited|credit|received|refunded|deposited|refund|income|inflow)\b/i.test(textToScan)) {
+      if (/\b(credited|credit|received|refunded|deposited|reversal)\b/i.test(textToScan)) {
         type = 'credit';
-      } else if (/\b(debited|debit|spent|withdrawn|sent|paid|payment|outflow)\b/i.test(textToScan)) {
+      } else if (/\b(debited|debit|spent|withdrawn|sent|paid|payment)\b/i.test(textToScan)) {
         type = 'debit';
       }
 
-      console.log(`[Gmail Scan] Parsing email ID: ${msg.id} | Subject: "${subject}" | Detected Type: ${type}`);
+      console.log(`[Gmail Scan] Parsing email ID: ${msg.id} | Detected Type: ${type}`);
 
-      // Expanded list of vendors
-      const vendors = [
-        { name: 'Netflix', domain: 'netflix.com', category: 'OTT' },
-        { name: 'Spotify', domain: 'spotify.com', category: 'Music' },
-        { name: 'Amazon Prime', domain: 'amazon.com', category: 'Shopping' },
-        { name: 'Amazon', domain: 'amazon.in', category: 'Shopping' },
-        { name: 'Flipkart', domain: 'flipkart.com', category: 'Shopping' },
-        { name: 'YouTube', domain: 'youtube.com', category: 'OTT' },
-        { name: 'Disney', domain: 'disneyplus.com', category: 'OTT' },
-        { name: 'LinkedIn', domain: 'linkedin.com', category: 'Work' },
-        { name: 'Adobe', domain: 'adobe.com', category: 'Work' },
-        { name: 'Canva', domain: 'canva.com', category: 'Design' },
-        { name: 'ChatGPT', domain: 'openai.com', category: 'AI' },
-        { name: 'Apple', domain: 'apple.com', category: 'Tech' },
-        { name: 'Google One', domain: 'google.com', category: 'Storage' },
-        { name: 'Microsoft', domain: 'microsoft.com', category: 'Work' },
-        { name: 'GitHub', domain: 'github.com', category: 'Work' },
-        { name: 'Hotstar', domain: 'hotstar.com', category: 'Streaming' },
-        { name: 'Zomato', domain: 'zomato.com', category: 'Food' },
-        { name: 'Swiggy', domain: 'swiggy.com', category: 'Food' },
-        { name: 'Uber', domain: 'uber.com', category: 'Transport' },
-        { name: 'Ola', domain: 'olacabs.com', category: 'Transport' },
-        { name: 'Rapido', domain: 'rapido.bike', category: 'Transport' },
-        { name: 'Blinkit', domain: 'blinkit.com', category: 'Food' },
-        { name: 'Zepto', domain: 'zeptonow.com', category: 'Food' }
-      ];
+      let vendorName = null;
+      let category = "Bank Transaction";
+      let domain = "hdfcbank.com";
 
-      const textForRegex = subject + " " + snippet;
-      let matchedVendor = vendors.find(v => textForRegex.includes(v.name.toLowerCase()));
-      
-      let vendorName = matchedVendor ? matchedVendor.name : null;
-      let category = matchedVendor ? matchedVendor.category : "Subscription";
-      let domain = matchedVendor ? matchedVendor.domain : "google.com";
+      // 1. Check for UPI/VPA info (Info: UPI-MERCHANT or VPA-MERCHANT)
+      const infoMatch = textToScan.match(/info:\s*(?:upi|vpa)-([a-z0-9@.-]+)/i);
+      if (infoMatch) {
+         vendorName = infoMatch[1].split('@')[0].replace(/[^a-z0-9]/gi, ' ').trim().toUpperCase();
+      }
 
-      // Dynamic Extraction for Banks (Fallback)
+      // 2. Check for "at [Merchant]" or "to [Merchant]" pattern
       if (!vendorName) {
-        // Look for patterns like "at [VENDOR]", "to [VENDOR]", "spent on [VENDOR]", "from [VENDOR]", "by [VENDOR]"
-        const merchantMatch = textForRegex.match(/(?:at|to|on|toward|towards|from|by)\s+([A-Z0-9\s\.]+?)(?:\s+using|\s+on|\s+at|\s+branch|\s+for|\s+card|\.|\n|$)/i);
-        if (merchantMatch && merchantMatch[1]) {
-           const potential = merchantMatch[1].trim();
-           // Filter out common noise
-           if (potential.length > 2 && !['your', 'a', 'the', 'rs'].includes(potential.toLowerCase())) {
-              vendorName = potential.split(' ')[0].toUpperCase(); // Take first word for simplicity
-               category = "Bank Transaction";
-           }
-        }
+         const atMatch = textToScan.match(/(?:at|to|toward|towards)\s+([a-z0-9\s*]+?)(?:\s+on|\s+using|\s+via|\s+for|\s+card|\.|-|$)/i);
+         if (atMatch && atMatch[1].trim().length > 2) {
+             const potentialName = atMatch[1].trim().toUpperCase();
+             if (!['HDFC', 'ACCOUNT', 'YOUR', 'THE'].includes(potentialName)) {
+                 vendorName = potentialName;
+             }
+         }
       }
 
       if (!vendorName) {
-        // Look for bank name from the email snippet
-        const bankMatch = textForRegex.match(/\b(hdfc|icici|sbi|axis|kotak|state bank|bank)\b/i);
-        if (bankMatch) {
-          vendorName = bankMatch[1].toUpperCase();
-          category = "Bank Transaction";
-        }
-      }
-
-      if (!vendorName) {
-        vendorName = type === 'credit' ? 'REFUND/CREDIT' : 'DEBIT TRANSACTION';
-        category = "Bank Transaction";
+        vendorName = type === 'credit' ? 'HDFC CREDIT' : 'HDFC DEBIT';
       }
 
       if (vendorName) {
-        const priceMatch = textForRegex.match(/(?:₹|\$|rs\.?|usd|inr)\s?(\d+(?:[.,]\d{2})?)/i);
-        const price = priceMatch ? priceMatch[1] : "199";
+        // Find price
+        const priceMatch = textToScan.match(/(?:₹|\$|rs\.?|usd|inr)\s?(\d+(?:[.,]\d{2})?)/i);
+        const price = priceMatch ? priceMatch[1] : "0";
 
         console.log(`[Gmail Scan] Parsed Alert details - Vendor: ${vendorName} | Price: ${price} | Category: ${category} | Type: ${type}`);
 

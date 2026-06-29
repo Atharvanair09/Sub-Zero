@@ -60,6 +60,17 @@ class _GmailConnectPageState extends State<GmailConnectPage> {
         return;
       }
 
+      // EXPLICITLY request the new scopes, since signIn() won't prompt if already signed in
+      final bool isAuthorized = await googleSignIn.requestScopes(['https://www.googleapis.com/auth/gmail.readonly']);
+      
+      if (!isAuthorized) {
+        setState(() {
+          _state = _ConnectState.idle;
+          _errorMessage = 'Permission denied by user';
+        });
+        return;
+      }
+
       // Mark as connected in our local session
       await AuthService.instance.setGmailConnected(true);
 
