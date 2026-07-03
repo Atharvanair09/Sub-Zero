@@ -25,6 +25,24 @@ const rules = [
             rawTitle: match[2],
             transactionType: 'Credit'
         })
+    },
+    {
+        name: 'HDFC_CREDIT_EMAIL_UPI',
+        tier: 1,
+        // Example: Rs.532.00 has been successfully credited... Sender: VIKRAM RATHORE (VPA: vikramrathore23@okaxis)
+        // Captures: 1=Amount, 2=Sender Name, 3=VPA
+        pattern: /Rs\.?\s*([\d,]+\.?\d*)\s+has been successfully credited[\s\S]*?Sender:\s*(.*?)\s*\(VPA:\s*(.*?)\)/i,
+        extract: (match) => {
+            let displayTitle = match[2].trim();
+            // Basic cleanup before normalizer
+            displayTitle = displayTitle.replace(/^(Mr\.|Ms\.|M\/S\s*)/i, '').replace(/,+$/, '').trim();
+            return {
+                amount: match[1].replace(/,/g, ''),
+                displayTitle: displayTitle,
+                rawTitle: match[3].toLowerCase(),
+                transactionType: 'Credit'
+            };
+        }
     }
 ];
 
