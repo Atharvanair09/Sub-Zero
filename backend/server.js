@@ -3,6 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const { google } = require("googleapis");
+const { parseEmail } = require("./src/parser/engine");
 
 const app = express();
 
@@ -644,53 +645,37 @@ app.get("/api/gmail/scan", async (req, res) => {
       const subject = details.data.payload.headers.find(h => h.name === 'Subject')?.value.toLowerCase() || "";
       const textToScan = subject + " " + snippet;
 
+      const parsed = parseEmail(textToScan);
+      
+      let vendorName = null;
       let type = 'debit';
-      if (/\b(credited|credit|received|refunded|deposited|reversal)\b/i.test(textToScan)) {
-        type = 'credit';
-      } else if (/\b(debited|debit|spent|withdrawn|sent|paid|payment)\b/i.test(textToScan)) {
-        type = 'debit';
+      let category = "Bank Transaction";
+      let domain = "hdfcbank.com";
+      let price = "0";
+
+      if (parsed.displayTitle !== "Unknown Transaction" && parsed.confidence > 0) {
+         vendorName = parsed.displayTitle.toUpperCase();
+         type = parsed.transactionType.toLowerCase();
+         price = parsed.amount ? parsed.amount : "0";
+      } else {
+         // Fallback to simple detection
+         if (/\b(credited|credit|received|refunded|deposited|reversal)\b/i.test(textToScan)) {
+            type = 'credit';
+         } else {
+            type = 'debit';
+         }
+         vendorName = type === 'credit' ? 'HDFC CREDIT' : 'HDFC DEBIT';
+      }
+
+      // If price is still "0" or null, try extracting it manually (useful for generic VPAs where we didn't extract amount)
+      if (!price || price === "0") {
+         const priceMatch = textToScan.match(/(?:₹|\$|rs\.?|usd|inr)\s?(\d+(?:[.,]\d{2})?)/i);
+         price = priceMatch ? priceMatch[1] : "0";
       }
 
       console.log(`[Gmail Scan] Parsing email ID: ${msg.id} | Detected Type: ${type}`);
 
-      let vendorName = null;
-      let category = "Bank Transaction";
-      let domain = "hdfcbank.com";
-
-      // 1. Check for explicit Sender (common in HDFC credit emails)
-      const senderMatch = textToScan.match(/sender:\s*([a-z0-9\s]+?)\s*(?:\(vpa|\(upi|-|$)/i);
-      if (senderMatch) {
-         vendorName = senderMatch[1].trim().toUpperCase();
-      }
-
-      // 2. Check for UPI/VPA info (Info: UPI-MERCHANT or VPA-MERCHANT)
-      if (!vendorName) {
-        const infoMatch = textToScan.match(/info:\s*(?:upi|vpa)-([a-z0-9@.-]+)/i);
-        if (infoMatch) {
-           vendorName = infoMatch[1].split('@')[0].replace(/[^a-z0-9]/gi, ' ').trim().toUpperCase();
-        }
-      }
-
-      // 2. Check for "at [Merchant]" or "to [Merchant]" pattern
-      if (!vendorName) {
-         const atMatch = textToScan.match(/(?:at|to|toward|towards)\s+([a-z0-9\s*]+?)(?:\s+on|\s+using|\s+via|\s+for|\s+card|\.|-|$)/i);
-         if (atMatch && atMatch[1].trim().length > 2) {
-             const potentialName = atMatch[1].trim().toUpperCase();
-             if (!['HDFC', 'ACCOUNT', 'YOUR', 'THE'].includes(potentialName)) {
-                 vendorName = potentialName;
-             }
-         }
-      }
-
-      if (!vendorName) {
-        vendorName = type === 'credit' ? 'HDFC CREDIT' : 'HDFC DEBIT';
-      }
-
       if (vendorName) {
-        // Find price
-        const priceMatch = textToScan.match(/(?:₹|\$|rs\.?|usd|inr)\s?(\d+(?:[.,]\d{2})?)/i);
-        const price = priceMatch ? priceMatch[1] : "0";
-
         console.log(`[Gmail Scan] Parsed Alert details - Vendor: ${vendorName} | Price: ${price} | Category: ${category} | Type: ${type}`);
 
         // Filter out if already added as a subscription or transaction
