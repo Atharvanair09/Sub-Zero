@@ -16,9 +16,11 @@ function extractCreditSender(rawEmailBody) {
 
     for (const rule of rules) {
         try {
-            const match = cleanedText.match(rule.pattern);
-            if (match) {
+            const regex = new RegExp(rule.pattern.source, rule.pattern.flags.includes('g') ? rule.pattern.flags : rule.pattern.flags + 'g');
+            let match;
+            while ((match = regex.exec(cleanedText)) !== null) {
                 const extractedData = rule.extract(match);
+                if (!extractedData) continue;
                 
                 let displayTitle = "Unknown Sender";
                 if (extractedData.senderName) {

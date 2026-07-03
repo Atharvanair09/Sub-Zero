@@ -27,7 +27,7 @@ c. UPI Reference No.: 438274823749
     assert.strictEqual(res2.displayTitle, 'Amit Sharma', 'Test 2 Failed: displayTitle');
     assert.strictEqual(res2.rawTitle, 'amit@upi', 'Test 2 Failed: rawTitle');
     assert.strictEqual(res2.transactionType, 'Credit', 'Test 2 Failed: transactionType');
-    assert.strictEqual(res2.confidence, 0.9, 'Test 2 Failed: confidence');
+    assert.strictEqual(res2.confidence, 0.99, 'Test 2 Failed: confidence');
     console.log("✅ Test 2 Passed: Generic Inline VPA with Name");
 
     // Test 3: Generic Inline VPA Only
