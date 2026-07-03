@@ -1,0 +1,10 @@
+[
+  {
+    "pattern": "^(?:vpa|upi(?: id)?)\\s+",
+    "replacement": ""
+  },
+  {
+    "pattern": "[.\\-_]",
+    "replacement": " "
+  }
+]

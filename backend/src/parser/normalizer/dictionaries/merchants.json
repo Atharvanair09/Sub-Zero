@@ -1,0 +1,37 @@
+{
+  "Amazon": {
+    "aliases": [
+      "amazon seller services",
+      "amzn",
+      "amazon pay",
+      "amazon pay india"
+    ],
+    "category": "Shopping"
+  },
+  "Swiggy": {
+    "aliases": [
+      "bundl technologies",
+      "swiggy"
+    ],
+    "category": "Food"
+  },
+  "Uber": {
+    "aliases": [
+      "uber india systems",
+      "uber bv"
+    ],
+    "category": "Transport"
+  },
+  "Zomato": {
+    "aliases": [
+      "zomato media"
+    ],
+    "category": "Food"
+  },
+  "Netflix": {
+    "aliases": [
+      "netflix india"
+    ],
+    "category": "Entertainment"
+  }
+}
