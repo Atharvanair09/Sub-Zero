@@ -659,6 +659,7 @@ app.get("/api/gmail/scan", async (req, res) => {
       const subject = details.data.payload.headers.find(h => h.name === 'Subject')?.value.toLowerCase() || "";
       const textToScan = subject + " " + snippet;
 
+      const { parseEmail, extractCreditSender } = require("./src/parser/index");
       const parsed = parseEmail(textToScan);
       
       let vendorName = null;
@@ -671,14 +672,27 @@ app.get("/api/gmail/scan", async (req, res) => {
          vendorName = parsed.displayTitle.toUpperCase();
          type = parsed.transactionType.toLowerCase();
          price = parsed.amount ? parsed.amount : "0";
+         
+         if (type === 'credit') {
+             const creditData = extractCreditSender(textToScan);
+             if (creditData.displayTitle !== "Unknown Sender") {
+                 vendorName = creditData.displayTitle.toUpperCase();
+             }
+         }
       } else {
          // Fallback to simple detection
          if (/\b(credited|credit|received|refunded|deposited|reversal)\b/i.test(textToScan)) {
             type = 'credit';
+            const creditData = extractCreditSender(textToScan);
+            if (creditData.displayTitle !== "Unknown Sender") {
+                 vendorName = creditData.displayTitle.toUpperCase();
+            } else {
+                 vendorName = 'HDFC CREDIT';
+            }
          } else {
             type = 'debit';
+            vendorName = 'HDFC DEBIT';
          }
-         vendorName = type === 'credit' ? 'HDFC CREDIT' : 'HDFC DEBIT';
       }
 
       // If price is still "0" or null, try extracting it manually (useful for generic VPAs where we didn't extract amount)

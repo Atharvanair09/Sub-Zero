@@ -22,6 +22,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   bool _isSyncing = false;
   bool _isHistoricalSyncing = false;
   String _selectedFilter = 'ALL';
+  bool _showAllTransactions = false;
   Timer? _syncTimer;
 
   final List<Color> _cardColors = const [
@@ -247,8 +248,8 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
     }
   }
 
-  Map<String, List<dynamic>> _groupTransactions(List<dynamic> txns) {
-    final filtered = txns.where((t) {
+  List<dynamic> _getFilteredAndSortedTransactions() {
+    final filtered = _transactions.where((t) {
       final category = (t['category'] ?? '').toString().toLowerCase();
       if (_selectedFilter == 'ALL') return true;
       if (_selectedFilter == 'TECH') {
@@ -269,14 +270,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
       return dateB.compareTo(dateA);
     });
 
-    final Map<String, List<dynamic>> groups = {};
-    for (var t in filtered) {
-      final dateStr = t['date'] ?? '';
-      final parsedDate = DateTime.tryParse(dateStr) ?? DateTime.now();
-      final header = _formatDateHeader(parsedDate);
-      groups.putIfAbsent(header, () => []).add(t);
-    }
-    return groups;
+    return filtered;
   }
 
   String _formatDateHeader(DateTime date) {
@@ -297,7 +291,17 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final groupedTxns = _groupTransactions(_transactions);
+    final allFilteredTxns = _getFilteredAndSortedTransactions();
+    final bool hasMore = allFilteredTxns.length > 10;
+    final displayTxns = _showAllTransactions ? allFilteredTxns : allFilteredTxns.take(10).toList();
+    
+    final Map<String, List<dynamic>> groupedTxns = {};
+    for (var t in displayTxns) {
+      final dateStr = t['date'] ?? '';
+      final parsedDate = DateTime.tryParse(dateStr) ?? DateTime.now();
+      final header = _formatDateHeader(parsedDate);
+      groupedTxns.putIfAbsent(header, () => []).add(t);
+    }
     
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -496,6 +500,43 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
                       const SizedBox(height: 24),
                     ];
                   }),
+                  
+                if (hasMore)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0, bottom: 24.0),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showAllTransactions = !_showAllTransactions;
+                        });
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: _showAllTransactions ? Colors.white : const Color(0xFF2954FF),
+                          border: Border.all(color: Colors.black, width: 2),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black,
+                              offset: Offset(4, 4),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: Text(
+                            _showAllTransactions ? 'SHOW LESS' : 'SEE ALL',
+                            style: GoogleFonts.inter(
+                              color: _showAllTransactions ? Colors.black : Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
