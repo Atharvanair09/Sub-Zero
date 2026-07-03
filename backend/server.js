@@ -587,8 +587,9 @@ app.get("/api/auth/google/callback", async (req, res) => {
 });
 
 app.get("/api/gmail/scan", async (req, res) => {
-  const { userId, autoSave, accessToken } = req.query;
-  console.log(`[Gmail Scan] Initiated scan for userId: ${userId}, autoSave: ${autoSave}`);
+  const { userId, autoSave, accessToken, limit } = req.query;
+  const maxResults = limit ? parseInt(limit, 10) : 50;
+  console.log(`[Gmail Scan] Initiated scan for userId: ${userId}, autoSave: ${autoSave}, limit: ${maxResults}`);
   try {
     const user = await User.findById(userId);
 
@@ -627,7 +628,7 @@ app.get("/api/gmail/scan", async (req, res) => {
     const response = await gmail.users.messages.list({
       userId: "me",
       q: `from:${process.env.BANK_ALERT_EMAIL}`,
-      maxResults: 50,
+      maxResults: maxResults,
     });
 
     const messages = response.data.messages || [];
@@ -635,7 +636,20 @@ app.get("/api/gmail/scan", async (req, res) => {
 
     console.log(`[Gmail Scan] Found ${messages.length} potential emails to analyze.`);
 
-    for (const msg of messages) {
+    // Bulk check for existing transactions/subscriptions to avoid rescanning
+    const messageIds = messages.map(m => m.id);
+    const existingTxns = await mongoose.model('Transaction').find({ userId, externalId: { $in: messageIds } }, 'externalId').lean();
+    const existingSubs = await mongoose.model('Subscription').find({ userId, externalId: { $in: messageIds } }, 'externalId').lean();
+    
+    const existingIds = new Set([
+      ...existingTxns.map(t => t.externalId),
+      ...existingSubs.map(s => s.externalId)
+    ]);
+    
+    const newMessages = messages.filter(m => !existingIds.has(m.id));
+    console.log(`[Gmail Scan] Skipping ${existingIds.size} already processed emails. ${newMessages.length} new emails to parse.`);
+
+    for (const msg of newMessages) {
       const details = await gmail.users.messages.get({
         userId: "me",
         id: msg.id,

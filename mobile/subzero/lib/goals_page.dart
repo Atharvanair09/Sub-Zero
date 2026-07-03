@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math';
@@ -15,11 +16,13 @@ class GoalsPage extends StatefulWidget {
   State<GoalsPage> createState() => _GoalsPageState();
 }
 
-class _GoalsPageState extends State<GoalsPage> {
+class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   List<dynamic> _transactions = [];
   bool _isLoading = true;
   bool _isSyncing = false;
+  bool _isHistoricalSyncing = false;
   String _selectedFilter = 'ALL';
+  Timer? _syncTimer;
 
   final List<Color> _cardColors = const [
     Color(0xFF2954FF), // Blue
@@ -31,7 +34,25 @@ class _GoalsPageState extends State<GoalsPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchTransactions();
+    _syncTimer = Timer.periodic(const Duration(seconds: 150), (timer) {
+      _syncEmails(silent: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncEmails(silent: true);
+    }
   }
 
   String _getBackendUrl() {
@@ -95,12 +116,21 @@ class _GoalsPageState extends State<GoalsPage> {
     }
   }
 
-  Future<void> _syncEmails() async {
-    setState(() => _isSyncing = true);
+  Future<void> _syncEmails({bool silent = false, int limit = 50}) async {
+    if (!silent) {
+      if (limit > 50) {
+        setState(() => _isHistoricalSyncing = true);
+      } else {
+        setState(() => _isSyncing = true);
+      }
+    }
     final userId = AuthService.instance.userId ?? '';
     if (userId.isEmpty) {
       if (!mounted) return;
-      setState(() => _isSyncing = false);
+      if (!silent) {
+        if (limit > 50) setState(() => _isHistoricalSyncing = false);
+        else setState(() => _isSyncing = false);
+      }
       return;
     }
 
@@ -119,52 +149,62 @@ class _GoalsPageState extends State<GoalsPage> {
         }
       }
 
-      final response = await _apiCall('/api/gmail/scan?userId=$userId&autoSave=true$accessTokenQuery');
+      final response = await _apiCall('/api/gmail/scan?userId=$userId&autoSave=true&limit=$limit$accessTokenQuery');
       if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        if (data['skipped'] == true) {
-          // User has not connected Gmail yet — don't treat this as an error
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('GMAIL NOT CONNECTED. OPEN THE WEB APP TO LINK YOUR ACCOUNT.'),
-              duration: Duration(seconds: 4),
-            ),
-          );
-        } else if (data['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('EMAIL SYNC COMPLETED SUCCESSFULLY')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('NO NEW TRANSACTIONS FOUND')),
-          );
+        if (!silent) {
+          if (data['skipped'] == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('GMAIL NOT CONNECTED. OPEN THE WEB APP TO LINK YOUR ACCOUNT.'),
+                duration: Duration(seconds: 4),
+              ),
+            );
+          } else if (data['success'] == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('EMAIL SYNC COMPLETED SUCCESSFULLY')),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('NO NEW TRANSACTIONS FOUND')),
+            );
+          }
         }
       } else if (response.statusCode == 401) {
         // Token expired — ask user to re-authenticate on web
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('GOOGLE AUTH EXPIRED. PLEASE RE-AUTHENTICATE ON WEB APP.'),
-            duration: Duration(seconds: 5),
-          ),
-        );
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('GOOGLE AUTH EXPIRED. PLEASE RE-AUTHENTICATE ON WEB APP.'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('FAILED TO SYNC GMAIL TRANSACTION ALERTS')),
-        );
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('FAILED TO SYNC GMAIL TRANSACTION ALERTS')),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error syncing emails: $e');
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('SYNC ERROR. SERVER MIGHT BE UNREACHABLE.')),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _isSyncing = false);
+        setState(() {
+          if (!silent) {
+            if (limit > 50) _isHistoricalSyncing = false;
+            else _isSyncing = false;
+          }
+        });
         _fetchTransactions();
       }
     }
@@ -366,11 +406,12 @@ class _GoalsPageState extends State<GoalsPage> {
                     _buildFilterButton('TECH'),
                     _buildFilterButton('FOOD'),
                     _buildFilterButton('LIFE'),
+                    _buildDeepSyncButton(),
                   ],
                 ),
                 const SizedBox(height: 32),
                 
-                if (_isLoading)
+                if (_isLoading || _isHistoricalSyncing)
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 60.0),
@@ -383,7 +424,7 @@ class _GoalsPageState extends State<GoalsPage> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'LOADING TRANSACTIONS HISTORY...',
+                            _isHistoricalSyncing ? 'PERFORMING DEEP SYNC...' : 'LOADING TRANSACTIONS HISTORY...',
                             style: GoogleFonts.inter(
                               color: Colors.black,
                               fontWeight: FontWeight.w900,
@@ -599,5 +640,35 @@ class _GoalsPageState extends State<GoalsPage> {
       ),
     );
   }
-}
 
+  Widget _buildDeepSyncButton() {
+    return GestureDetector(
+      onTap: () {
+        if (!_isHistoricalSyncing && !_isSyncing) {
+          _syncEmails(silent: false, limit: 200);
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF9AFF00), // Vibrant Green
+          border: Border.all(color: Colors.black, width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black,
+              offset: Offset(3, 3),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Text(
+          'DEEP SYNC',
+          style: GoogleFonts.inter(
+            color: Colors.black,
+            fontWeight: FontWeight.w900,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+}
