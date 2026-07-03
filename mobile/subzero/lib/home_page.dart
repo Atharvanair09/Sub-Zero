@@ -1,14 +1,159 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import 'profile_page.dart';
 import 'goals_page.dart';
 import 'add_transaction_page.dart';
 import 'budget_overview_page.dart';
 import 'financial_health_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  double _balance = 23746.92;
+  Set<String> _processedTransactionIds = {};
+  Timer? _fetchTimer;
+  bool _isFirstRun = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadBalanceData().then((_) {
+      _fetchTransactions();
+    });
+    _fetchTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _fetchTransactions();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _fetchTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetchTransactions();
+    }
+  }
+
+  String _getBackendUrl() {
+    if (kIsWeb) {
+      return 'http://localhost:5000';
+    }
+    try {
+      if (Platform.isAndroid) {
+        return 'http://10.0.2.2:5000';
+      }
+    } catch (_) {}
+    return 'http://localhost:5000';
+  }
+
+  Future<void> _fetchTransactions() async {
+    final userId = AuthService.instance.userId ?? '';
+    if (userId.isEmpty) return;
+
+    final path = '/api/transactions?userId=$userId';
+    final localUrl = '${_getBackendUrl()}$path';
+    http.Response? response;
+
+    try {
+      response = await http.get(Uri.parse(localUrl)).timeout(const Duration(seconds: 4));
+    } catch (_) {
+      try {
+        final prodUrl = 'https://sub-zero-50le.onrender.com$path';
+        response = await http.get(Uri.parse(prodUrl));
+      } catch (_) {}
+    }
+
+    if (response != null && response.statusCode == 200) {
+      try {
+        final List<dynamic> data = jsonDecode(response.body);
+        List<Map<String, dynamic>> txns = List<Map<String, dynamic>>.from(data);
+        
+        final prefs = await SharedPreferences.getInstance();
+        if (_isFirstRun) {
+          for (var tx in txns) {
+            String id = tx['_id']?.toString() ?? '';
+            if (id.isNotEmpty) _processedTransactionIds.add(id);
+          }
+          _isFirstRun = false;
+          await prefs.setStringList('processed_transaction_ids_v3', _processedTransactionIds.toList());
+        } else {
+          await processNewTransactions(txns);
+        }
+      } catch (e) {
+        debugPrint('Error parsing transactions: $e');
+      }
+    }
+  }
+
+  Future<void> _loadBalanceData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _balance = prefs.getDouble('current_balance_v3') ?? 23746.92;
+      List<String>? processedIds = prefs.getStringList('processed_transaction_ids_v3');
+      if (processedIds != null) {
+        _processedTransactionIds = processedIds.toSet();
+      } else {
+        _isFirstRun = true;
+      }
+    });
+  }
+
+  /// Call this method when new transactions are synced.
+  /// Example transaction format: {'externalId': 'tx123', 'amount': 500.0, 'type': 'credit'}
+  Future<void> processNewTransactions(List<Map<String, dynamic>> newTransactions) async {
+    final prefs = await SharedPreferences.getInstance();
+    bool balanceChanged = false;
+
+    for (var tx in newTransactions) {
+      String id = tx['_id']?.toString() ?? '';
+      if (id.isEmpty || _processedTransactionIds.contains(id)) {
+        continue;
+      }
+
+      double amount = (tx['amount'] as num).toDouble();
+      String type = (tx['type'] as String?)?.toLowerCase() ?? 'debit'; // 'credit' or 'debit'
+
+      if (type == 'credit') {
+        _balance += amount;
+      } else if (type == 'debit') {
+        _balance -= amount;
+      }
+
+      _processedTransactionIds.add(id);
+      balanceChanged = true;
+    }
+
+    if (balanceChanged) {
+      setState(() {});
+      await prefs.setDouble('current_balance_v3', _balance);
+      await prefs.setStringList('processed_transaction_ids_v3', _processedTransactionIds.toList());
+    }
+  }
+
+  String _formatBalance(double balance) {
+    String fixed = balance.toStringAsFixed(2);
+    List<String> parts = fixed.split('.');
+    String formattedInt = parts[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => ',');
+    return '₹$formattedInt.${parts[1]}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +237,7 @@ class HomePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '₹14,102.23',
+                      _formatBalance(_balance),
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.w900,
                         fontSize: 40,

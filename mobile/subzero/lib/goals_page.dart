@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'auth_service.dart';
 
 class GoalsPage extends StatefulWidget {
@@ -23,6 +24,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   bool _isHistoricalSyncing = false;
   String _selectedFilter = 'ALL';
   bool _showAllTransactions = false;
+  String? _syncStatusMessage;
   Timer? _syncTimer;
 
   final List<Color> _cardColors = const [
@@ -165,9 +167,10 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
               ),
             );
           } else if (data['success'] == true) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('EMAIL SYNC COMPLETED SUCCESSFULLY')),
-            );
+            setState(() {
+              _syncStatusMessage = 'EMAIL SYNCED SUCCESSFULLY';
+            });
+            await Future.delayed(const Duration(seconds: 2));
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('NO NEW TRANSACTIONS FOUND')),
@@ -201,6 +204,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
     } finally {
       if (mounted) {
         setState(() {
+          _syncStatusMessage = null;
           if (!silent) {
             if (limit > 50) _isHistoricalSyncing = false;
             else _isSyncing = false;
@@ -419,13 +423,13 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const CircularProgressIndicator(
+                          LoadingAnimationWidget.staggeredDotsWave(
                             color: Colors.black,
-                            strokeWidth: 4.0,
+                            size: 40,
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            _isHistoricalSyncing ? 'PERFORMING DEEP SYNC...' : 'LOADING TRANSACTIONS HISTORY...',
+                            _syncStatusMessage ?? (_isHistoricalSyncing ? 'PERFORMING DEEP SYNC...' : 'LOADING TRANSACTIONS HISTORY...'),
                             style: GoogleFonts.inter(
                               color: Colors.black,
                               fontWeight: FontWeight.w900,
