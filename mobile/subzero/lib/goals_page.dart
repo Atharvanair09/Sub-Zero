@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'auth_service.dart';
 
 class GoalsPage extends StatefulWidget {
@@ -26,6 +27,8 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   bool _showAllTransactions = false;
   String? _syncStatusMessage;
   Timer? _syncTimer;
+  int _currentGraphIndex = 0;
+  final PageController _graphPageController = PageController();
 
   final List<Color> _cardColors = const [
     Color(0xFF2954FF), // Blue
@@ -48,6 +51,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _syncTimer?.cancel();
+    _graphPageController.dispose();
     super.dispose();
   }
 
@@ -342,56 +346,87 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Weekly Flow Card
-                _buildNeobrutalistCard(
-                  color: const Color(0xFFF4F4F4),
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // Graphs PageView
+                SizedBox(
+                  height: 315,
+                  child: PageView(
+                    controller: _graphPageController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentGraphIndex = index;
+                      });
+                    },
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'WEEKLY\nFLOW',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 24,
-                              height: 1.1,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          Text(
-                            '\$4,290.00',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 20,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      // Bar Chart
-                      SizedBox(
-                        height: 160,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // Weekly Flow Card
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
+                        child: _buildNeobrutalistCard(
+                          color: const Color(0xFFF4F4F4),
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildChartColumn('MON', 40, const Color(0xFF2954FF)),
-                            _buildChartColumn('TUE', 80, const Color(0xFF9AFF00)),
-                            _buildChartColumn('WED', 30, const Color(0xFFB00000)),
-                            _buildChartColumn('THU', 100, const Color(0xFF2954FF)),
-                            _buildChartColumn('FRI', 60, const Color(0xFF9AFF00)),
-                            _buildChartColumn('SAT', 70, Colors.black),
-                            _buildChartColumn('SUN', 90, const Color(0xFFE5E5FF)),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'WEEKLY\nFLOW',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 24,
+                                    height: 1.1,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                Text(
+                                  '\$4,290.00',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 20,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            // Bar Chart
+                            SizedBox(
+                              height: 160,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _buildChartColumn('MON', 40, const Color(0xFF2954FF)),
+                                  _buildChartColumn('TUE', 80, const Color(0xFF9AFF00)),
+                                  _buildChartColumn('WED', 30, const Color(0xFFB00000)),
+                                  _buildChartColumn('THU', 100, const Color(0xFF2954FF)),
+                                  _buildChartColumn('FRI', 60, const Color(0xFF9AFF00)),
+                                  _buildChartColumn('SAT', 70, Colors.black),
+                                  _buildChartColumn('SUN', 90, const Color(0xFFE5E5FF)),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
+                      ),
+                      // Pie Chart Card
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
+                        child: _buildPieChartCard(),
+                      ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildPageIndicator(0),
+                    const SizedBox(width: 8),
+                    _buildPageIndicator(1),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 // Filter Buttons
@@ -580,6 +615,12 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
           decoration: BoxDecoration(
             color: color,
             border: Border.all(color: Colors.black, width: 1.5),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black,
+                offset: Offset(2, 2),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
@@ -592,6 +633,184 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPageIndicator(int index) {
+    bool isActive = _currentGraphIndex == index;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: isActive ? 24 : 12,
+      height: 12,
+      decoration: BoxDecoration(
+        color: isActive ? Colors.black : Colors.white,
+        border: Border.all(color: Colors.black, width: 2),
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black,
+            offset: Offset(2, 2),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPieChartCard() {
+    Map<String, double> categoryTotals = {};
+    for (var t in _transactions) {
+      final String type = (t['type'] ?? 'debit').toString().toLowerCase();
+      if (type == 'credit') continue;
+      String category = (t['category'] ?? 'OTHER').toString().toUpperCase();
+      if (category.length > 10) category = category.substring(0, 10);
+      final double amount = (t['amount'] ?? 0).toDouble();
+      categoryTotals[category] = (categoryTotals[category] ?? 0) + amount;
+    }
+
+    final sortedEntries = categoryTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+      
+    Map<String, double> topCategories = {};
+    double otherTotal = 0;
+    for (int i = 0; i < sortedEntries.length; i++) {
+      if (i < 4) {
+        topCategories[sortedEntries[i].key] = sortedEntries[i].value;
+      } else {
+        otherTotal += sortedEntries[i].value;
+      }
+    }
+    if (otherTotal > 0) {
+      topCategories['OTHER'] = otherTotal;
+    }
+
+    List<PieChartSectionData> sections = [];
+    final colors = [
+      const Color(0xFF2954FF),
+      const Color(0xFF9AFF00),
+      const Color(0xFFFF4C4C),
+      const Color(0xFFFFDE43),
+      const Color(0xFFB00000),
+    ];
+    int colorIndex = 0;
+    
+    topCategories.forEach((category, amount) {
+      sections.add(
+        PieChartSectionData(
+          color: colors[colorIndex % colors.length],
+          value: amount,
+          title: '\$${amount.toInt()}',
+          titleStyle: GoogleFonts.inter(
+            fontWeight: FontWeight.w900,
+            fontSize: 10,
+            color: Colors.white,
+            shadows: [const Shadow(color: Colors.black, blurRadius: 2)],
+          ),
+          radius: 50,
+          borderSide: const BorderSide(color: Colors.black, width: 2),
+        ),
+      );
+      colorIndex++;
+    });
+
+    if (sections.isEmpty) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.grey,
+          value: 1,
+          title: '',
+          radius: 50,
+          borderSide: const BorderSide(color: Colors.black, width: 2),
+        )
+      );
+    }
+
+    return _buildNeobrutalistCard(
+      color: const Color(0xFFF4F4F4),
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'EXPENSES\nBY CATEGORY',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w900,
+              fontSize: 24,
+              height: 1.1,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 160,
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black,
+                          offset: Offset(4, 4),
+                        ),
+                      ],
+                    ),
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 0,
+                        centerSpaceRadius: 25,
+                        sections: sections,
+                        borderData: FlBorderData(show: false),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: topCategories.entries.map((e) {
+                      final cIndex = topCategories.keys.toList().indexOf(e.key);
+                      final color = colors[cIndex % colors.length];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: color,
+                                border: Border.all(color: Colors.black, width: 1.5),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                e.key,
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 10,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
