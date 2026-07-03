@@ -315,18 +315,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
             letterSpacing: -0.5,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: _isSyncing 
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                  )
-                : const Icon(Icons.sync, color: Colors.black),
-            onPressed: _isSyncing ? null : _syncEmails,
-          ),
-        ],
+
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(2.0),
           child: Container(
@@ -398,14 +387,22 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 24),
                 // Filter Buttons
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildFilterButton('ALL'),
-                    _buildFilterButton('TECH'),
-                    _buildFilterButton('FOOD'),
-                    _buildFilterButton('LIFE'),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _buildFilterButton('ALL'),
+                          _buildFilterButton('TECH'),
+                          _buildFilterButton('FOOD'),
+                          _buildFilterButton('LIFE'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     _buildDeepSyncButton(),
                   ],
                 ),
@@ -651,6 +648,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF9AFF00), // Vibrant Green
+          shape: BoxShape.circle,
           border: Border.all(color: Colors.black, width: 2),
           boxShadow: const [
             BoxShadow(
@@ -659,14 +657,11 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
             ),
           ],
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Text(
-          'DEEP SYNC',
-          style: GoogleFonts.inter(
-            color: Colors.black,
-            fontWeight: FontWeight.w900,
-            fontSize: 12,
-          ),
+        padding: const EdgeInsets.all(8),
+        child: const Icon(
+          Icons.sync,
+          color: Colors.black,
+          size: 22,
         ),
       ),
     );
