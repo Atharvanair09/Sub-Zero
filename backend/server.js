@@ -655,9 +655,28 @@ app.get("/api/gmail/scan", async (req, res) => {
         id: msg.id,
       });
 
-      const snippet = details.data.snippet.toLowerCase();
+      function getEmailBody(payload) {
+        let body = '';
+        if (payload.parts) {
+          for (let part of payload.parts) {
+            if (part.mimeType === 'text/plain' && part.body && part.body.data) {
+              body += Buffer.from(part.body.data, 'base64').toString('utf8') + ' ';
+            } else if (part.mimeType === 'text/html' && part.body && part.body.data) {
+              body += Buffer.from(part.body.data, 'base64').toString('utf8') + ' ';
+            } else if (part.parts) {
+              body += getEmailBody(part) + ' ';
+            }
+          }
+        } else if (payload.body && payload.body.data) {
+          body += Buffer.from(payload.body.data, 'base64').toString('utf8');
+        }
+        return body;
+      }
+
+      const snippet = details.data.snippet ? details.data.snippet.toLowerCase() : "";
       const subject = details.data.payload.headers.find(h => h.name === 'Subject')?.value.toLowerCase() || "";
-      const textToScan = subject + " " + snippet;
+      const fullBody = getEmailBody(details.data.payload).toLowerCase();
+      const textToScan = subject + " " + snippet + " " + fullBody;
 
       const { parseEmail, extractCreditSender } = require("./src/parser/index");
       const parsed = parseEmail(textToScan);
