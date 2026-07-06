@@ -732,34 +732,53 @@ app.get("/api/gmail/scan", async (req, res) => {
         const alreadyExistsInSub = await Subscription.findOne({ userId, externalId: msg.id });
         const alreadyExistsInTxn = await Transaction.findOne({ userId, externalId: msg.id });
 
-        if (!alreadyExistsInSub && !alreadyExistsInTxn) {
+        // Semantic deduplication: Check for same amount, name, type within a 2-hour window
+        const emailDate = new Date(parseInt(details.data.internalDate));
+        const windowStart = new Date(emailDate.getTime() - 2 * 60 * 60 * 1000);
+        const windowEnd = new Date(emailDate.getTime() + 2 * 60 * 60 * 1000);
+        const numericPrice = parseFloat(price.replace(',', ''));
+
+        const duplicateTxn = await Transaction.findOne({
+            userId,
+            amount: numericPrice,
+            name: vendorName,
+            type: type,
+            date: { $gte: windowStart, $lte: windowEnd }
+        });
+
+        const alreadyInDetected = detected.find(d => 
+            d.name === vendorName && 
+            parseFloat(d.price) === numericPrice && 
+            d.type === type &&
+            Math.abs(d.date - emailDate.getTime()) < 2 * 60 * 60 * 1000
+        );
+
+        if (!alreadyExistsInSub && !alreadyExistsInTxn && !duplicateTxn && !alreadyInDetected) {
            if (autoSave === 'true') {
              const newTxn = new Transaction({
                userId,
                name: vendorName,
-               amount: parseFloat(price.replace(',', '')),
+               amount: numericPrice,
                category: category,
                logo: `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
                externalId: msg.id,
                type: type,
-               date: new Date(parseInt(details.data.internalDate))
+               date: emailDate
              });
              await newTxn.save();
            }
 
-           if (!detected.find(d => d.name === vendorName)) {
-             detected.push({
-               name: vendorName,
-               price: price.replace(',', ''),
-               plan: 'Detected Alert',
-               category: category,
-               logo: `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
-               detectedFrom: details.data.payload.headers.find(h => h.name === 'Subject')?.value || "Bank Alert",
-               date: parseInt(details.data.internalDate),
-               externalId: msg.id,
-               type: type
-             });
-           }
+           detected.push({
+             name: vendorName,
+             price: price.replace(',', ''),
+             plan: 'Detected Alert',
+             category: category,
+             logo: `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
+             detectedFrom: details.data.payload.headers.find(h => h.name === 'Subject')?.value || "Bank Alert",
+             date: emailDate.getTime(),
+             externalId: msg.id,
+             type: type
+           });
         }
       }
     }
