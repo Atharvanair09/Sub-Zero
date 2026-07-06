@@ -348,7 +348,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
               children: [
                 // Graphs PageView
                 SizedBox(
-                  height: 315,
+                  height: 370,
                   child: PageView(
                     controller: _graphPageController,
                     onPageChanged: (index) {
@@ -389,21 +389,21 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 6),
                             // Bar Chart
                             SizedBox(
-                              height: 160,
+                              height: 240,
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  _buildChartColumn('MON', 40, const Color(0xFF2954FF)),
-                                  _buildChartColumn('TUE', 80, const Color(0xFF9AFF00)),
-                                  _buildChartColumn('WED', 30, const Color(0xFFB00000)),
-                                  _buildChartColumn('THU', 100, const Color(0xFF2954FF)),
-                                  _buildChartColumn('FRI', 60, const Color(0xFF9AFF00)),
-                                  _buildChartColumn('SAT', 70, Colors.black),
-                                  _buildChartColumn('SUN', 90, const Color(0xFFE5E5FF)),
+                                  _buildDividedChartColumn('MON', [20, 28, 16, 8]),
+                                  _buildDividedChartColumn('TUE', [36, 54, 36, 18]),
+                                  _buildDividedChartColumn('WED', [18, 18, 9, 9]),
+                                  _buildDividedChartColumn('THU', [54, 72, 36, 18]),
+                                  _buildDividedChartColumn('FRI', [27, 36, 27, 18]),
+                                  _buildDividedChartColumn('SAT', [36, 45, 27, 18]),
+                                  _buildDividedChartColumn('SUN', [45, 63, 36, 18]),
                                 ],
                               ),
                             ),
@@ -621,6 +621,56 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
                 offset: Offset(2, 2),
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w800,
+            fontSize: 10,
+            color: Colors.grey[700],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDividedChartColumn(String label, List<double> heights) {
+    final colors = [
+      const Color(0xFF9AFF00), // Green
+      const Color(0xFF2954FF), // Blue
+      const Color(0xFFFF4C4C), // Red
+      const Color(0xFFB0B0B0), // Grey
+    ];
+    
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Container(
+          width: 28,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.black, width: 1.5),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black,
+                offset: Offset(2, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: List.generate(heights.length, (index) {
+              return Container(
+                width: double.infinity,
+                height: heights[index],
+                decoration: BoxDecoration(
+                  color: colors[index % colors.length],
+                  border: index == 0 ? null : const Border(top: BorderSide(color: Colors.black, width: 1.5)),
+                ),
+              );
+            }),
           ),
         ),
         const SizedBox(height: 8),
