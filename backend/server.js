@@ -740,20 +740,58 @@ app.get("/api/gmail/scan", async (req, res) => {
         const windowEnd = new Date(emailDate.getTime() + 2 * 60 * 60 * 1000);
         const numericPrice = parseFloat(price.replace(',', ''));
 
-        const duplicateTxn = await Transaction.findOne({
+        // More robust deduplication logic to catch bank alerts vs specific merchant receipts
+        const potentialDuplicates = await Transaction.find({
             userId,
             amount: numericPrice,
-            name: vendorName,
             type: type,
             date: { $gte: windowStart, $lte: windowEnd }
         });
 
-        const alreadyInDetected = detected.find(d => 
-            d.name === vendorName && 
-            parseFloat(d.price) === numericPrice && 
-            d.type === type &&
-            Math.abs(d.date - emailDate.getTime()) < 2 * 60 * 60 * 1000
-        );
+        let duplicateTxn = null;
+        for (const pt of potentialDuplicates) {
+            const name1 = vendorName.toLowerCase();
+            const name2 = pt.name.toLowerCase();
+            if (name1 === name2 || name1.includes(name2) || name2.includes(name1) || 
+                name1.includes('hdfc') || name2.includes('hdfc') || name1.includes('unknown') || name2.includes('unknown') ||
+                name1.includes('upi') || name2.includes('upi')) {
+                duplicateTxn = pt;
+                
+                // If the incoming transaction has a better/more specific name, update the generic one
+                const newIsGeneric = name1.includes('hdfc') || name1.includes('unknown') || name1.includes('upi');
+                const oldIsGeneric = name2.includes('hdfc') || name2.includes('unknown') || name2.includes('upi');
+                
+                if (oldIsGeneric && !newIsGeneric) {
+                    pt.name = vendorName;
+                    pt.category = category;
+                    if (autoSave === 'true') {
+                        await pt.save();
+                    }
+                }
+                break;
+            }
+        }
+
+        let alreadyInDetected = null;
+        for (const d of detected) {
+            if (parseFloat(d.price) === numericPrice && d.type === type && Math.abs(d.date - emailDate.getTime()) < 2 * 60 * 60 * 1000) {
+                const name1 = vendorName.toLowerCase();
+                const name2 = d.name.toLowerCase();
+                if (name1 === name2 || name1.includes(name2) || name2.includes(name1) || 
+                    name1.includes('hdfc') || name2.includes('hdfc') || name1.includes('unknown') || name2.includes('unknown') ||
+                    name1.includes('upi') || name2.includes('upi')) {
+                    alreadyInDetected = d;
+                    
+                    const newIsGeneric = name1.includes('hdfc') || name1.includes('unknown') || name1.includes('upi');
+                    const oldIsGeneric = name2.includes('hdfc') || name2.includes('unknown') || name2.includes('upi');
+                    if (oldIsGeneric && !newIsGeneric) {
+                        d.name = vendorName;
+                        d.category = category;
+                    }
+                    break;
+                }
+            }
+        }
 
         if (!alreadyExistsInSub && !alreadyExistsInTxn && !duplicateTxn && !alreadyInDetected) {
            if (autoSave === 'true') {
