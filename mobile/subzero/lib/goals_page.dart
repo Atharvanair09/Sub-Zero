@@ -258,16 +258,22 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
 
   List<dynamic> _getFilteredAndSortedTransactions() {
     final filtered = _transactions.where((t) {
-      final category = (t['category'] ?? '').toString().toLowerCase();
       if (_selectedFilter == 'ALL') return true;
+
+      final category = (t['category'] ?? '').toString().toLowerCase();
+      final name = (t['name'] ?? '').toString().toLowerCase();
+
+      bool isFood = name.contains('zomato') || name.contains('swiggy') || ['food', 'dining'].contains(category);
+      bool isTech = name.contains('pvr') || name.contains('valve') || name.contains('amazon') || ['entertainment', 'ott', 'streaming', 'music', 'tech', 'work'].contains(category);
+      
       if (_selectedFilter == 'TECH') {
-        return ['entertainment', 'ott', 'streaming', 'music', 'tech', 'work'].contains(category);
+        return isTech;
       }
       if (_selectedFilter == 'FOOD') {
-        return ['food', 'dining'].contains(category);
+        return isFood;
       }
       if (_selectedFilter == 'LIFE') {
-        return ['life', 'bills', 'transport', 'shopping', 'bank transaction', 'general'].contains(category);
+        return !isFood && !isTech;
       }
       return true;
     }).toList();
