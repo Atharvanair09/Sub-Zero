@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -13,172 +14,120 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  // Scene 1: SPEND.
-  late final Animation<double> _spendOpacity;
-  late final Animation<double> _spendScale;
-  late final Animation<double> _spendSlideOut;
+  late final Animation<double> _scrollIndex;
+  late final Animation<double> _settleOffset;
+  late final Animation<double> _surroundingOpacity;
+  late final Animation<double> _growScale;
 
-  // Scene 2: SAVE.
-  late final Animation<double> _saveOpacity;
-  late final Animation<double> _saveSlideIn;
-  late final Animation<double> _saveSlideOut;
+  late final Animation<double> _blocksCollision;
+  late final Animation<double> _blocksRetract;
 
-  // Scene 3: GROW.
-  late final Animation<double> _growOpacity;
-  late final Animation<double> _growSlideIn;
-  late final Animation<double> _growSlideOut;
-
-  // Scene 4: Brutalist Blocks Slide & Collide
-  late final Animation<double> _blocksCollisionProgress;
-
-  // Scene 5: Blocks Retract & Logo Reveal
-  late final Animation<double> _blocksRetractProgress;
-  late final Animation<double> _logoOpacity;
-  late final Animation<double> _logoScale;
-
-  // Scene 6: Thick Border & Logo Scale-in
-  late final Animation<double> _borderWidth;
-  late final Animation<double> _logoFinalScale;
-
-  // Scene 7: Exit Transition
+  late final Animation<double> _morphFlip;
+  late final Animation<double> _borderProgress;
+  late final Animation<double> _logoEmphasis;
   late final Animation<double> _exitOpacity;
+
+  final List<String> words = [
+    "INCOME.", "TRACK.", "PLAN.", "BUDGET.", "BUILD.", "TRAVEL.", "SHOP.", "LEARN.", "INVEST.", "ASSETS.", 
+    "SPEND.", // Index 10
+    "EXPENSE.", "WEALTH.", "EQUITY.", "PROFIT.", "START.", "FREEDOM.", "FUTURE.", "OPTIONS.", "GOALS.",
+    "SAVE.", // Index 20
+    "COMPOUND.", "DIVIDEND.", "CAPITAL.", "MARKET.", "FUNDS.", "STOCKS.", "BONDS.", "CASH.", "VALUE.",
+    "GROW.", // Index 30
+    "VISION.", "LEGACY.", "EMPIRE.", "SUCCESS.", "FORTUNE."
+  ];
 
   @override
   void initState() {
     super.initState();
 
-    // Total duration: 5.5 seconds (5000ms sequence + 500ms exit fade)
+    // Total duration: 9550ms
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 5500),
+      duration: const Duration(milliseconds: 9550),
     );
 
-    // We split 0.0 to 1.0 (5500ms total) into precise intervals:
-    // 0ms - 1000ms: Scene 1 (t = 0.0 to 0.1818)
-    // 1000ms - 2000ms: Scene 2 (t = 0.1818 to 0.3636)
-    // 2000ms - 3000ms: Scene 3 (t = 0.3636 to 0.5455)
-    // 3000ms - 3800ms: Scene 4 (t = 0.5455 to 0.6909)
-    // 3800ms - 4400ms: Scene 5 (t = 0.6909 to 0.8000)
-    // 4400ms - 5000ms: Scene 6 (t = 0.8000 to 0.9091)
-    // 5000ms - 5500ms: Scene 7 Exit (t = 0.9091 to 1.0)
+    // Timeline mapping: weights correspond exactly to milliseconds
+    _scrollIndex = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 900),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 10.0).chain(CurveTween(curve: Curves.easeInOutQuart)), weight: 1200),
+      TweenSequenceItem(tween: ConstantTween(10.0), weight: 900),
+      TweenSequenceItem(tween: Tween(begin: 10.0, end: 20.0).chain(CurveTween(curve: Curves.easeInOutQuart)), weight: 1200),
+      TweenSequenceItem(tween: ConstantTween(20.0), weight: 900),
+      TweenSequenceItem(tween: Tween(begin: 20.0, end: 30.0).chain(CurveTween(curve: Curves.easeInOutQuart)), weight: 1200),
+      TweenSequenceItem(tween: ConstantTween(30.0), weight: 3250),
+    ]).animate(_controller);
 
-    // Scene 1: "SPEND."
-    // Enters from 0ms to 200ms (t: 0.0 -> 0.0364)
-    _spendOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.0364, curve: Curves.easeOut),
-      ),
-    );
-    _spendScale = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.0364, curve: Curves.easeOut),
-      ),
-    );
-    // Exits from 1000ms to 1200ms (t: 0.1818 -> 0.2182)
-    _spendSlideOut = Tween<double>(begin: 0.0, end: -100.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.1818, 0.2182, curve: Curves.easeIn),
-      ),
-    );
+    // Mechanical settle 4px down and back up at each stop
+    _settleOffset = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 2100),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 4.0).chain(CurveTween(curve: Curves.easeOut)), weight: 150),
+      TweenSequenceItem(tween: Tween(begin: 4.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 150),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 1800),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 4.0).chain(CurveTween(curve: Curves.easeOut)), weight: 150),
+      TweenSequenceItem(tween: Tween(begin: 4.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 150),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 1800),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 4.0).chain(CurveTween(curve: Curves.easeOut)), weight: 150),
+      TweenSequenceItem(tween: Tween(begin: 4.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 150),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 2950),
+    ]).animate(_controller);
 
-    // Scene 2: "SAVE."
-    // Enters from 1000ms to 1200ms (t: 0.1818 -> 0.2182)
-    _saveOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.1818, 0.2182, curve: Curves.easeOut),
-      ),
-    );
-    _saveSlideIn = Tween<double>(begin: 100.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.1818, 0.2182, curve: Curves.easeOut),
-      ),
-    );
-    // Exits from 2000ms to 2200ms (t: 0.3636 -> 0.4000)
-    _saveSlideOut = Tween<double>(begin: 0.0, end: -100.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.3636, 0.4000, curve: Curves.easeIn),
-      ),
-    );
+    // Fade out surrounding words when GROW. is centered
+    _surroundingOpacity = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 6300),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeOut)), weight: 450),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 2800),
+    ]).animate(_controller);
 
-    // Scene 3: "GROW."
-    // Enters from 2000ms to 2200ms (t: 0.3636 -> 0.4000)
-    _growOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.3636, 0.4000, curve: Curves.easeOut),
-      ),
-    );
-    _growSlideIn = Tween<double>(begin: 100.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.3636, 0.4000, curve: Curves.easeOut),
-      ),
-    );
-    // Exits from 3000ms to 3200ms (t: 0.5455 -> 0.5818)
-    _growSlideOut = Tween<double>(begin: 0.0, end: -100.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.5455, 0.5818, curve: Curves.easeIn),
-      ),
-    );
+    // Scale down GROW. slightly before morph
+    _growScale = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 6300),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.95).chain(CurveTween(curve: Curves.easeOut)), weight: 450),
+      TweenSequenceItem(tween: ConstantTween(0.95), weight: 2800),
+    ]).animate(_controller);
 
-    // Scene 4: Colored blocks slide and collide (3000ms - 3800ms, t: 0.5455 -> 0.6909)
-    // We use easeOutBack for a mechanical, solid impact curve
-    _blocksCollisionProgress = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.5455, 0.6909, curve: Curves.easeOutBack),
-      ),
-    );
+    // Brutalist blocks slide in
+    _blocksCollision = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 6750),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeOutExpo)), weight: 450),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 2350),
+    ]).animate(_controller);
 
-    // Scene 5: Blocks retract (3800ms - 4300ms, t: 0.6909 -> 0.7818)
-    _blocksRetractProgress = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.6909, 0.7818, curve: Curves.easeInOut),
-      ),
-    );
-    // Logo reveals (3900ms - 4400ms, t: 0.7091 -> 0.8000)
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.7091, 0.8000, curve: Curves.easeOut),
-      ),
-    );
-    _logoScale = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.7091, 0.8000, curve: Curves.easeOutBack),
-      ),
-    );
+    // Brutalist blocks retract
+    _blocksRetract = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 7200),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeOutExpo)), weight: 450),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 1900),
+    ]).animate(_controller);
 
-    // Scene 6: Thick border animates + logo scale-in (4400ms - 4700ms, t: 0.8000 -> 0.8545)
-    _borderWidth = Tween<double>(begin: 0.0, end: 16.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.8000, 0.8545, curve: Curves.easeInOut),
-      ),
-    );
-    _logoFinalScale = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.8000, 0.8545, curve: Curves.easeInOut),
-      ),
-    );
+    // Split-flap morph effect: 0.0 to 1.0 is GROW flipping out. 1.0 to 2.0 is SUB-ZERO flipping in.
+    _morphFlip = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 7200),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 225),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 2.0).chain(CurveTween(curve: Curves.easeOut)), weight: 225),
+      TweenSequenceItem(tween: ConstantTween(2.0), weight: 1900),
+    ]).animate(_controller);
 
-    // Scene 7: Exit transition fade-out (5000ms - 5500ms, t: 0.9091 -> 1.0)
-    _exitOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.9091, 1.0, curve: Curves.easeIn),
-      ),
-    );
+    // Border draws clockwise around the screen
+    _borderProgress = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 7650),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeInOutCubic)), weight: 450),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 1450),
+    ]).animate(_controller);
+
+    // Final subtle scale bump for the logo
+    _logoEmphasis = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 7650),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.03).chain(CurveTween(curve: Curves.easeOut)), weight: 225),
+      TweenSequenceItem(tween: Tween(begin: 1.03, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 225),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 1450),
+    ]).animate(_controller);
+
+    // Exit transition to main app
+    _exitOpacity = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 9100),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeOut)), weight: 450),
+    ]).animate(_controller);
 
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
@@ -195,275 +144,362 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  Widget _buildBrutalistBlock({
+    required Color color,
+    required double startX,
+    required double startY,
+    required double targetOffsetX,
+    required double targetOffsetY,
+    required double retractOffsetX,
+    required double retractOffsetY,
+    required double screenWidth,
+    required double screenHeight,
+  }) {
+    final colProg = _blocksCollision.value;
+    final retProg = _blocksRetract.value;
+
+    if (colProg == 0.0 && retProg == 0.0) return const SizedBox.shrink();
+    if (retProg == 1.0) return const SizedBox.shrink(); // fully retracted and gone
+
+    final centerX = screenWidth / 2;
+    final centerY = screenHeight / 2;
+
+    final targetX = centerX + targetOffsetX;
+    final targetY = centerY + targetOffsetY;
+
+    // Interpolate collision (slide in)
+    final colX = startX + (targetX - startX) * colProg;
+    final colY = startY + (targetY - startY) * colProg;
+
+    // Interpolate retraction (blast out)
+    final posX = colX + (retractOffsetX * retProg);
+    final posY = colY + (retractOffsetY * retProg);
+
+    // Scale down and fade during retract
+    final scale = 1.0 - (0.4 * retProg);
+    final opacity = (1.0 - retProg).clamp(0.0, 1.0);
+
+    return Positioned(
+      left: posX - 60, // 120 size, so 60 is center offset
+      top: posY - 60,
+      child: Opacity(
+        opacity: opacity,
+        child: Transform.scale(
+          scale: scale,
+          child: Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: color,
+              border: Border.all(color: const Color(0xFF000000), width: 4.0),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final screenWidth = size.width;
-    final screenHeight = size.height;
-
-    // Grid details for Scene 4 & 5
-    const double blockSize = 130.0;
-    final double centerLeftX = (screenWidth / 2) - blockSize;
-    final double centerRightX = (screenWidth / 2);
-    final double centerTopY = (screenHeight / 2) - blockSize;
-    final double centerBottomY = (screenHeight / 2);
-
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final exitOpacityVal = _exitOpacity.value;
+        final exitOpacity = _exitOpacity.value;
+        if (exitOpacity <= 0.0) return const SizedBox.shrink();
 
-        // Skip calculations and render nothing if fully exited
-        if (exitOpacityVal <= 0.0) {
-          return const SizedBox.shrink();
-        }
+        return Opacity(
+          opacity: exitOpacity,
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF8F7F4),
+            body: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final screenWidth = constraints.maxWidth;
+                  final screenHeight = constraints.maxHeight;
+                  
+                  // Settings for the mechanical wheel
+                  const double itemHeight = 100.0;
+                  final currentIndex = _scrollIndex.value;
 
-        return Positioned.fill(
-          child: Opacity(
-            opacity: exitOpacityVal,
-            child: Stack(
-              children: [
-                // 1. Full Screen Background
-                Container(
-                  color: const Color(0xFFF8F7F4),
-                ),
+                  return Stack(
+                    children: [
+                      // 1. The Continuous Mechanical Wheel
+                      Align(
+                        alignment: Alignment.center,
+                        child: ClipRect(
+                          child: SizedBox(
+                            height: screenHeight,
+                            width: double.infinity,
+                            child: OverflowBox(
+                              maxHeight: double.infinity,
+                              alignment: Alignment.topCenter,
+                              child: Transform.translate(
+                                // Calculate exact offset to center the `currentIndex`
+                                offset: Offset(0, (screenHeight / 2) - (currentIndex * itemHeight) - (itemHeight / 2) + _settleOffset.value),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: words.asMap().entries.map((entry) {
+                                    final index = entry.key;
+                                    final word = entry.value;
 
-                // 2. Scene 1 Text: "SPEND."
-                if (_controller.value < 0.2182)
-                  Center(
-                    child: Opacity(
-                      opacity: _spendOpacity.value,
-                      child: Transform.translate(
-                        offset: Offset(0, _spendSlideOut.value),
-                        child: Transform.scale(
-                          scale: _spendScale.value,
-                          child: Text(
-                            'SPEND.',
-                            style: GoogleFonts.spaceGrotesk(
-                              color: const Color(0xFF111111),
-                              fontSize: 80,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -2.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                                    // The distance from the center (currentIndex)
+                                    final double dist = (currentIndex - index).abs();
+                                    
+                                    // Only highlight the exact words we stop on (INCOME, SPEND, SAVE, GROW)
+                                    // Intermediate words stay static to prevent high-speed flashing and visual jank
+                                    final bool isTargetStop = index == 0 || index == 10 || index == 20 || index == 30;
+                                    final double centerFactor = isTargetStop ? (1.0 - dist).clamp(0.0, 1.0) : 0.0;
 
-                // 3. Scene 2 Text: "SAVE."
-                if (_controller.value >= 0.1818 && _controller.value < 0.4000)
-                  Center(
-                    child: Opacity(
-                      opacity: _saveOpacity.value,
-                      child: Transform.translate(
-                        offset: Offset(0, _saveSlideIn.value + _saveSlideOut.value),
-                        child: Text(
-                          'SAVE.',
-                          style: GoogleFonts.spaceGrotesk(
-                            color: const Color(0xFF111111),
-                            fontSize: 80,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -2.0,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                                    // Base text properties
+                                    Color wordColor = Color.lerp(
+                                      const Color(0xFF999999).withOpacity(0.4), // light gray / low opacity
+                                      const Color(0xFF111111), // pure black
+                                      centerFactor,
+                                    )!;
+                                    
+                                    // Keep font weight constant to avoid synthetic bold layout jitter
+                                    const FontWeight wordWeight = FontWeight.normal;
+                                    
+                                    // Slightly larger when centered
+                                    double scale = 1.0 + (0.15 * centerFactor); // 1.0 to 1.15
+                                    
+                                    // Opacity from 0.4 to 1.0
+                                    double opacity = 0.4 + (0.6 * centerFactor);
 
-                // 4. Scene 3 Text: "GROW."
-                if (_controller.value >= 0.3636 && _controller.value < 0.5818)
-                  Center(
-                    child: Opacity(
-                      opacity: _growOpacity.value,
-                      child: Transform.translate(
-                        offset: Offset(0, _growSlideIn.value + _growSlideOut.value),
-                        child: Text(
-                          'GROW.',
-                          style: GoogleFonts.spaceGrotesk(
-                            color: const Color(0xFF111111),
-                            fontSize: 80,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -2.0,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                                    // Hide surrounding words at the end
+                                    if (index != 30) {
+                                      opacity *= _surroundingOpacity.value;
+                                    } else {
+                                      // This is GROW. Scale it down before morph.
+                                      scale *= _growScale.value;
+                                      // Hide the reel's GROW completely once morphing starts
+                                      // because the standalone morph widget takes over.
+                                      if (_morphFlip.value > 0.0) {
+                                        opacity = 0.0;
+                                      }
+                                    }
 
-                // 5. Scene 4 & 5: Colored Brutalist Blocks
-                if (_controller.value >= 0.5455 && _controller.value < 0.8000) ...[
-                  // Electric Blue (Top-Left)
-                  // Slide: Left (-blockSize to centerLeftX)
-                  // Retract: Top-Left (-retract, -retract) & Scale down & Fade
-                  _buildBrutalistBlock(
-                    color: const Color(0xFF2962FF),
-                    startX: -blockSize - 100,
-                    startY: centerTopY,
-                    endX: centerLeftX,
-                    endY: centerTopY,
-                    retractOffsetX: -40,
-                    retractOffsetY: -40,
-                    collisionProgress: _blocksCollisionProgress.value,
-                    retractProgress: _blocksRetractProgress.value,
-                    size: blockSize,
-                  ),
+                                    final bebasStyle = GoogleFonts.bebasNeue(
+                                      color: wordColor,
+                                      fontSize: 80,
+                                      fontWeight: wordWeight,
+                                      height: 1.0,
+                                      letterSpacing: 2.0,
+                                    );
 
-                  // Lime Green (Top-Right)
-                  // Slide: Right (screenWidth to centerRightX)
-                  // Retract: Top-Right (retract, -retract)
-                  _buildBrutalistBlock(
-                    color: const Color(0xFFB2FF05),
-                    startX: screenWidth + 100,
-                    startY: centerTopY,
-                    endX: centerRightX,
-                    endY: centerTopY,
-                    retractOffsetX: 40,
-                    retractOffsetY: -40,
-                    collisionProgress: _blocksCollisionProgress.value,
-                    retractProgress: _blocksRetractProgress.value,
-                    size: blockSize,
-                  ),
-
-                  // Bright Yellow (Bottom-Left)
-                  // Slide: Top (-blockSize to centerTopY, wait, let's slide from Top: Y = -blockSize to centerBottomY)
-                  // Retract: Bottom-Left (-retract, retract)
-                  _buildBrutalistBlock(
-                    color: const Color(0xFFFFD600),
-                    startX: centerLeftX,
-                    startY: -blockSize - 100,
-                    endX: centerLeftX,
-                    endY: centerBottomY,
-                    retractOffsetX: -40,
-                    retractOffsetY: 40,
-                    collisionProgress: _blocksCollisionProgress.value,
-                    retractProgress: _blocksRetractProgress.value,
-                    size: blockSize,
-                  ),
-
-                  // Coral Red (Bottom-Right)
-                  // Slide: Bottom (screenHeight to centerBottomY)
-                  // Retract: Bottom-Right (retract, retract)
-                  _buildBrutalistBlock(
-                    color: const Color(0xFFFF4B4B),
-                    startX: centerRightX,
-                    startY: screenHeight + 100,
-                    endX: centerRightX,
-                    endY: centerBottomY,
-                    retractOffsetX: 40,
-                    retractOffsetY: 40,
-                    collisionProgress: _blocksCollisionProgress.value,
-                    retractProgress: _blocksRetractProgress.value,
-                    size: blockSize,
-                  ),
-                ],
-
-                // 6. Scene 5 & 6 Logo Reveal
-                if (_controller.value >= 0.7091)
-                  Center(
-                    child: Opacity(
-                      opacity: _logoOpacity.value,
-                      child: Transform.scale(
-                        scale: _logoScale.value * _logoFinalScale.value,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'SUB-ZERO',
-                              style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF111111),
-                                fontSize: 76,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -2.0,
+                                    return Container(
+                                      height: itemHeight,
+                                      alignment: Alignment.center,
+                                      child: Opacity(
+                                        opacity: opacity,
+                                        child: Transform.scale(
+                                          scale: scale,
+                                          child: Text(word, style: bebasStyle),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Your Money Buddy',
-                              style: GoogleFonts.spaceGrotesk(
-                                color: const Color(0xFF111111),
-                                fontSize: 30,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // 7. Thick Black Border Animating Around Screen
-                if (_controller.value >= 0.8000)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: const Color(0xFF000000),
-                            width: _borderWidth.value,
                           ),
                         ),
                       ),
-                    ),
-                  ),
-              ],
+
+                      // 1.5 Arrow Overlay
+                      if (_surroundingOpacity.value > 0.0)
+                        Center(
+                          child: Opacity(
+                            opacity: _surroundingOpacity.value,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 380),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: const [
+                                    Icon(Icons.play_arrow, size: 40, color: Colors.black),
+                                    RotatedBox(
+                                      quarterTurns: 2,
+                                      child: Icon(Icons.play_arrow, size: 40, color: Colors.black),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // 2. Standalone Morphing Widget (GROW. -> SUB-ZERO)
+                      if (_morphFlip.value > 0.0)
+                        Center(
+                          child: Transform.scale(
+                            scale: (1.15 * _growScale.value) * _logoEmphasis.value,
+                            child: Transform(
+                              alignment: Alignment.center,
+                              transform: Matrix4.identity()
+                                ..setEntry(3, 2, 0.001) // perspective
+                                ..rotateX(_morphFlip.value < 1.0 
+                                    ? _morphFlip.value * (pi / 2) 
+                                    : (_morphFlip.value - 2.0) * (pi / 2)),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                alignment: Alignment.center,
+                                children: [
+                                  SizedBox(
+                                    height: itemHeight,
+                                    child: Center(
+                                      child: Text(
+                                        _morphFlip.value < 1.0 ? "GROW." : "SUB-ZERO",
+                                        style: GoogleFonts.bebasNeue(
+                                          color: const Color(0xFF111111),
+                                          fontSize: 80,
+                                          fontWeight: FontWeight.bold,
+                                          height: 1.0,
+                                          letterSpacing: 2.0,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (_morphFlip.value >= 1.0)
+                                    Positioned(
+                                      top: itemHeight - 10,
+                                      child: Text(
+                                        "Your Money Buddy",
+                                        style: GoogleFonts.inter(
+                                          color: const Color(0xFF111111),
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // 3. Brutalist Blocks Sliding In/Out
+                      if (_blocksCollision.value > 0.0) ...[
+                        _buildBrutalistBlock(
+                          color: const Color(0xFF2563EB), // Electric Blue
+                          startX: -200, startY: -200,
+                          targetOffsetX: -110, targetOffsetY: -90,
+                          retractOffsetX: -100, retractOffsetY: -100,
+                          screenWidth: screenWidth, screenHeight: screenHeight,
+                        ),
+                        _buildBrutalistBlock(
+                          color: const Color(0xFFA3E635), // Lime Green
+                          startX: screenWidth + 200, startY: -200,
+                          targetOffsetX: 110, targetOffsetY: -90,
+                          retractOffsetX: 100, retractOffsetY: -100,
+                          screenWidth: screenWidth, screenHeight: screenHeight,
+                        ),
+                        _buildBrutalistBlock(
+                          color: const Color(0xFFFACC15), // Bright Yellow
+                          startX: -200, startY: screenHeight + 200,
+                          targetOffsetX: -110, targetOffsetY: 90,
+                          retractOffsetX: -100, retractOffsetY: 100,
+                          screenWidth: screenWidth, screenHeight: screenHeight,
+                        ),
+                        _buildBrutalistBlock(
+                          color: const Color(0xFFF87171), // Coral Red
+                          startX: screenWidth + 200, startY: screenHeight + 200,
+                          targetOffsetX: 110, targetOffsetY: 90,
+                          retractOffsetX: 100, retractOffsetY: 100,
+                          screenWidth: screenWidth, screenHeight: screenHeight,
+                        ),
+                      ],
+
+                      // 4. Thick Black Border Drawing Clockwise
+                      if (_borderProgress.value > 0.0)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: BorderPainter(_borderProgress.value),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         );
       },
     );
   }
+}
 
-  Widget _buildBrutalistBlock({
-    required Color color,
-    required double startX,
-    required double startY,
-    required double endX,
-    required double endY,
-    required double retractOffsetX,
-    required double retractOffsetY,
-    required double collisionProgress,
-    required double retractProgress,
-    required double size,
-  }) {
-    // Current collision position
-    final currentCollisionX = startX + (endX - startX) * collisionProgress;
-    final currentCollisionY = startY + (endY - startY) * collisionProgress;
+// Custom Painter to draw a 4px black border around the screen, progressing clockwise
+class BorderPainter extends CustomPainter {
+  final double progress;
 
-    // Current retraction offset
-    final currentRetractX = retractOffsetX * retractProgress;
-    final currentRetractY = retractOffsetY * retractProgress;
+  BorderPainter(this.progress);
 
-    // Final position combines collision and retraction
-    final posX = currentCollisionX + currentRetractX;
-    final posY = currentCollisionY + currentRetractY;
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0.0) return;
 
-    // Scale down during retraction
-    final scale = 1.0 - (0.25 * retractProgress);
+    final paint = Paint()
+      ..color = const Color(0xFF000000)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8.0 // 4px border implies 8px stroke because it's centered on the edge (Wait, stroke is centered, so half is outside. Let's draw it inside the rect)
+      ..strokeJoin = StrokeJoin.miter;
 
-    // Fade out during retraction
-    final opacity = (1.0 - retractProgress).clamp(0.0, 1.0);
+    final path = Path();
+    final w = size.width;
+    final h = size.height;
+    
+    // To ensure the 4px border is entirely visible and not clipped, we inset the rect by 2px.
+    final double inset = 2.0;
+    final double innerW = w - inset * 2;
+    final double innerH = h - inset * 2;
+    
+    paint.strokeWidth = 4.0;
 
-    if (opacity <= 0.0) return const SizedBox.shrink();
+    final totalLength = (innerW * 2) + (innerH * 2);
+    final currentLength = totalLength * progress;
 
-    return Positioned(
-      left: posX,
-      top: posY,
-      child: Opacity(
-        opacity: opacity,
-        child: Transform.scale(
-          scale: scale,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: color,
-              border: Border.all(color: Colors.black, width: 3.5),
-            ),
-          ),
-        ),
-      ),
-    );
+    double drawnLength = 0.0;
+
+    // Top edge (left to right)
+    if (drawnLength < currentLength) {
+      final drawDist = (currentLength - drawnLength).clamp(0.0, innerW);
+      path.moveTo(inset, inset);
+      path.lineTo(inset + drawDist, inset);
+      drawnLength += innerW;
+    }
+
+    // Right edge (top to bottom)
+    if (drawnLength < currentLength) {
+      final drawDist = (currentLength - drawnLength).clamp(0.0, innerH);
+      path.moveTo(w - inset, inset);
+      path.lineTo(w - inset, inset + drawDist);
+      drawnLength += innerH;
+    }
+
+    // Bottom edge (right to left)
+    if (drawnLength < currentLength) {
+      final drawDist = (currentLength - drawnLength).clamp(0.0, innerW);
+      path.moveTo(w - inset, h - inset);
+      path.lineTo(w - inset - drawDist, h - inset);
+      drawnLength += innerW;
+    }
+
+    // Left edge (bottom to top)
+    if (drawnLength < currentLength) {
+      final drawDist = (currentLength - drawnLength).clamp(0.0, innerH);
+      path.moveTo(inset, h - inset);
+      path.lineTo(inset, h - inset - drawDist);
+    }
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant BorderPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }
