@@ -25,6 +25,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Set<String> _processedTransactionIds = {};
   Timer? _fetchTimer;
   bool _isFirstRun = false;
+  List<dynamic> _recentTransactions = [];
 
   @override
   void initState() {
@@ -85,6 +86,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       try {
         final List<dynamic> data = jsonDecode(response.body);
         List<Map<String, dynamic>> txns = List<Map<String, dynamic>>.from(data);
+        
+        setState(() {
+          _recentTransactions = data;
+          _recentTransactions.sort((a, b) {
+            final dateA = DateTime.tryParse(a['date'] ?? '') ?? DateTime.now();
+            final dateB = DateTime.tryParse(b['date'] ?? '') ?? DateTime.now();
+            return dateB.compareTo(dateA);
+          });
+        });
         
         final prefs = await SharedPreferences.getInstance();
         if (_isFirstRun) {
@@ -390,79 +400,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              // Monthly Outflow
-              _buildNeobrutalistCard(
-                color: const Color(0xFFFFD6D6),
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'MONTHLY OUTFLOW',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                        color: const Color(0xFFB00000),
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '-\$12,402.15',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 32,
-                        color: const Color(0xFFB00000),
-                        letterSpacing: -1,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'BUDGET USED',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 10,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        Text(
-                          '82%',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.black, width: 2),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 82,
-                            child: Container(
-                              color: const Color(0xFFCC0000),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 18,
-                            child: Container(),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -476,12 +413,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       letterSpacing: -0.5,
                     ),
                   ),
-                  Text(
-                    'VIEW ALL',
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                      decoration: TextDecoration.underline,
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const GoalsPage()),
+                      );
+                    },
+                    child: Text(
+                      'VIEW ALL',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
                 ],
@@ -489,39 +433,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               const SizedBox(height: 16),
               const Divider(color: Colors.black, thickness: 2),
               const SizedBox(height: 16),
-              _buildTransactionItem(
-                icon: Icons.shopping_bag_outlined,
-                title: 'Apple Store\nSoho',
-                subtitle: 'TECH & ELECTRONICS\n• 2H AGO',
-                amount: '-\$2,149.00',
-                iconColor: const Color(0xFFE5E5FF),
-              ),
+              if (_recentTransactions.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      'NO RECENT TRANSACTIONS',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                )
+              else
+                ..._recentTransactions.take(5).map((t) {
+                  final String title = t['name'] ?? 'TRANSACTION';
+                  final double amountVal = (t['amount'] ?? 0).toDouble();
+                  final String type = (t['type'] ?? 'debit').toString().toLowerCase();
+                  final bool isCredit = type == 'credit';
+                  final String sign = isCredit ? '+' : '-';
+                  
+                  final Color iconColor = isCredit ? const Color(0xFF9AFF00) : const Color(0xFFFF4C4C);
+                  final Color amountColor = isCredit ? const Color(0xFF3B8000) : Colors.black;
+                  final IconData icon = _getIconForCategory(t['category'] ?? '');
+                  
+                  final String categoryStr = (t['category'] ?? 'UNKNOWN').toString().toUpperCase();
+                  final String dateStr = t['date'] ?? '';
+                  final parsedDate = DateTime.tryParse(dateStr) ?? DateTime.now();
+                  final String header = _formatDateHeader(parsedDate);
+                  final String subtitle = '$categoryStr • $header';
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: _buildTransactionCard(
+                      icon: icon,
+                      title: title,
+                      subtitle: subtitle,
+                      amount: '$sign\$$amountVal',
+                      iconColor: iconColor,
+                      amountColor: amountColor,
+                    ),
+                  );
+                }),
               const SizedBox(height: 16),
-              _buildTransactionItem(
-                icon: Icons.restaurant_outlined,
-                title: 'The Nomad\nLibrary',
-                subtitle: 'DINING • 5H AGO',
-                amount: '-\$342.50',
-                iconColor: const Color(0xFF9AFF00),
-              ),
-              const SizedBox(height: 16),
-              _buildTransactionItem(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'Deposit from\nExternal',
-                subtitle: 'INCOME •\nYESTERDAY',
-                amount: '+\$5,000.00',
-                amountColor: const Color(0xFF3B8000),
-                iconColor: const Color(0xFFFFF0D4),
-              ),
-              const SizedBox(height: 16),
-              _buildTransactionItem(
-                icon: Icons.bolt_outlined,
-                title: 'ConEd Utilities',
-                subtitle: 'BILLS • YESTERDAY',
-                amount: '-\$185.20',
-                iconColor: const Color(0xFFE5E5FF),
-              ),
-              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -601,7 +553,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTransactionItem({
+  IconData _getIconForCategory(String category) {
+    switch (category.toLowerCase()) {
+      case 'food':
+      case 'dining':
+        return Icons.restaurant;
+      case 'transport':
+      case 'travel':
+        return Icons.directions_car;
+      case 'shopping':
+        return Icons.shopping_bag;
+      case 'bills':
+        return Icons.receipt;
+      case 'entertainment':
+      case 'ott':
+      case 'streaming':
+      case 'music':
+        return Icons.sports_esports;
+      case 'bank transaction':
+        return Icons.account_balance;
+      default:
+        return Icons.payment;
+    }
+  }
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final transactionDate = DateTime(date.year, date.month, date.day);
+    
+    if (transactionDate == today) {
+      return 'TODAY';
+    } else if (transactionDate == yesterday) {
+      return 'YESTERDAY';
+    } else {
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      return '${months[date.month - 1]} ${date.day.toString().padLeft(2, '0')}';
+    }
+  }
+
+  Widget _buildTransactionCard({
     required IconData icon,
     required String title,
     required String subtitle,

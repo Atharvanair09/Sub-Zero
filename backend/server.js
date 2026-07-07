@@ -679,11 +679,11 @@ app.get("/api/gmail/scan", async (req, res) => {
       const textToScan = subject + " " + snippet + " " + fullBody;
 
       const { parseEmail, extractCreditSender } = require("./src/parser/index");
+      const { categorizeTransaction } = require("./src/parser/categorizer");
       const parsed = parseEmail(textToScan);
       
       let vendorName = null;
       let type = 'debit';
-      let category = "Bank Transaction";
       let domain = "hdfcbank.com";
       let price = "0";
 
@@ -721,8 +721,10 @@ app.get("/api/gmail/scan", async (req, res) => {
       }
 
       console.log(`[Gmail Scan] Parsing email ID: ${msg.id} | Detected Type: ${type}`);
-
+      
+      let category = "Others";
       if (vendorName) {
+        category = categorizeTransaction(vendorName, textToScan);
         console.log(`[Gmail Scan] Parsed Alert details - Vendor: ${vendorName} | Price: ${price} | Category: ${category} | Type: ${type}`);
 
         // Filter out if already added as a subscription or transaction
