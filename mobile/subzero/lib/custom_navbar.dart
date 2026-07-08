@@ -22,7 +22,7 @@ class CustomNavBar extends StatelessWidget {
       child: Row(
         children: [
           _buildNavItem(Icons.home_filled, 'HOME', 0),
-          _buildNavItem(Icons.history, 'HISTORY', 1),
+          _buildNavItem(Icons.chat, 'AI', 1),
           _buildNavItem(Icons.pie_chart_outline, 'BUDGET', 2),
           _buildNavItem(Icons.health_and_safety_outlined, 'HEALTH', 3),
           _buildNavItem(Icons.person_outline, 'PROFILE', 4),
