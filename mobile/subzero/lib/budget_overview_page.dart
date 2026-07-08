@@ -57,12 +57,12 @@ class _BudgetOverviewPageState extends State<BudgetOverviewPage> {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 8),                           
                       Text(
                         'FOCUSING YOUR CAPITAL ON WHAT\nMATTERS',
                         style: GoogleFonts.inter(
                           color: const Color(0xFFE65100), // Deep orange
-                          fontSize: 14,
+                          fontSize: 14                           ,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.5,
                         ),
