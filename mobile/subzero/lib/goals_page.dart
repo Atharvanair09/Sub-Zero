@@ -29,6 +29,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   Timer? _syncTimer;
   int _currentGraphIndex = 0;
   final PageController _graphPageController = PageController();
+  int _touchedPieIndex = -1;
 
   final List<Color> _cardColors = const [
     Color(0xFF2954FF), // Blue
@@ -362,6 +363,65 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
       final header = _formatDateHeader(parsedDate);
       groupedTxns.putIfAbsent(header, () => []).add(t);
     }
+
+    // Calculate Weekly Flow
+    List<double> incoming = List.filled(7, 0.0);
+    List<double> outgoing = List.filled(7, 0.0);
+    
+    DateTime now = DateTime.now();
+    DateTime todayStart = DateTime(now.year, now.month, now.day);
+    DateTime startOfWeek = todayStart.subtract(Duration(days: now.weekday - 1));
+    
+    for (var t in _transactions) {
+      final dateStr = t['date'] ?? '';
+      final parsedDate = DateTime.tryParse(dateStr);
+      if (parsedDate == null) continue;
+      
+      final txnDate = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
+      if (txnDate.isBefore(startOfWeek) || txnDate.isAfter(todayStart)) continue;
+      
+      int dayIndex = txnDate.difference(startOfWeek).inDays;
+      if (dayIndex >= 0 && dayIndex < 7) {
+        final double amount = (t['amount'] ?? 0).toDouble();
+        final String type = (t['type'] ?? 'debit').toString().toLowerCase();
+        
+        if (type == 'credit') {
+          incoming[dayIndex] += amount;
+        } else {
+          outgoing[dayIndex] += amount;
+        }
+      }
+    }
+
+    double maxAmount = 0;
+    for (int i = 0; i < 7; i++) {
+      if (incoming[i] + outgoing[i] > maxAmount) {
+        maxAmount = incoming[i] + outgoing[i];
+      }
+    }
+    if (maxAmount == 0) maxAmount = 1;
+    
+    final double maxBarHeight = 180.0;
+    
+    List<List<double>> chartHeights = List.generate(7, (index) {
+      if (index > now.weekday - 1) return []; // Future days empty
+      
+      double incH = (incoming[index] / maxAmount) * maxBarHeight;
+      double outH = (outgoing[index] / maxAmount) * maxBarHeight;
+      
+      if (incoming[index] > 0 && incH < 2) incH = 2;
+      if (outgoing[index] > 0 && outH < 2) outH = 2;
+      
+      return [incH, outH];
+    });
+
+    double totalIncoming = incoming.reduce((a, b) => a + b);
+    double totalOutgoing = outgoing.reduce((a, b) => a + b);
+    double netFlow = totalIncoming - totalOutgoing;
+    
+    String sign = netFlow >= 0 ? '+' : '-';
+    String weeklyFlowText = '$sign\₹${netFlow.abs().toStringAsFixed(2)}';
+    Color weeklyFlowColor = netFlow >= 0 ? const Color(0xFF3B8000) : const Color(0xFFFF4C4C);
     
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -412,7 +472,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
               children: [
                 // Graphs PageView
                 SizedBox(
-                  height: 370,
+                  height: 365,
                   child: PageView(
                     controller: _graphPageController,
                     onPageChanged: (index) {
@@ -444,11 +504,11 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
                                   ),
                                 ),
                                 Text(
-                                  '\$4,290.00',
+                                  weeklyFlowText,
                                   style: GoogleFonts.inter(
                                     fontWeight: FontWeight.w900,
                                     fontSize: 20,
-                                    color: Colors.black87,
+                                    color: weeklyFlowColor,
                                   ),
                                 ),
                               ],
@@ -461,13 +521,13 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  _buildDividedChartColumn('MON', [20, 28, 16, 8]),
-                                  _buildDividedChartColumn('TUE', [36, 54, 36, 18]),
-                                  _buildDividedChartColumn('WED', [18, 18, 9, 9]),
-                                  _buildDividedChartColumn('THU', [54, 72, 36, 18]),
-                                  _buildDividedChartColumn('FRI', [27, 36, 27, 18]),
-                                  _buildDividedChartColumn('SAT', [36, 45, 27, 18]),
-                                  _buildDividedChartColumn('SUN', [45, 63, 36, 18]),
+                                  _buildDividedChartColumn('MON', chartHeights[0], incoming[0], outgoing[0]),
+                                  _buildDividedChartColumn('TUE', chartHeights[1], incoming[1], outgoing[1]),
+                                  _buildDividedChartColumn('WED', chartHeights[2], incoming[2], outgoing[2]),
+                                  _buildDividedChartColumn('THU', chartHeights[3], incoming[3], outgoing[3]),
+                                  _buildDividedChartColumn('FRI', chartHeights[4], incoming[4], outgoing[4]),
+                                  _buildDividedChartColumn('SAT', chartHeights[5], incoming[5], outgoing[5]),
+                                  _buildDividedChartColumn('SUN', chartHeights[6], incoming[6], outgoing[6]),
                                 ],
                               ),
                             ),
@@ -682,43 +742,66 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildDividedChartColumn(String label, List<double> heights) {
+  Widget _buildDividedChartColumn(String label, List<double> heights, [double incomingAmt = 0, double outgoingAmt = 0]) {
     final colors = [
-      const Color(0xFF9AFF00), // Green
-      const Color(0xFF2954FF), // Blue
-      const Color(0xFFFF4C4C), // Red
-      const Color(0xFFB0B0B0), // Grey
+      const Color(0xFF9AFF00), // Green (Incoming)
+      const Color(0xFFFF4C4C), // Red (Outgoing)
     ];
     
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Container(
-          width: 28,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.black, width: 1.5),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black,
-                offset: Offset(2, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: List.generate(heights.length, (index) {
-              return Container(
-                width: double.infinity,
-                height: heights[index],
-                decoration: BoxDecoration(
-                  color: colors[index % colors.length],
-                  border: index == 0 ? null : const Border(top: BorderSide(color: Colors.black, width: 1.5)),
+    bool isEmpty = heights.isEmpty || heights.every((h) => h == 0);
+    
+    return Tooltip(
+      message: 'In: ₹${incomingAmt.toStringAsFixed(0)} | Out: ₹${outgoingAmt.toStringAsFixed(0)}',
+      triggerMode: TooltipTriggerMode.tap,
+      preferBelow: false,
+      textStyle: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+        if (isEmpty)
+          const SizedBox(width: 28) // Placeholder to maintain width
+        else
+          Container(
+            width: 28,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black, width: 1.5),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black,
+                  offset: Offset(2, 2),
                 ),
-              );
-            }),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: List.generate(heights.length, (index) {
+                if (heights[index] == 0) return const SizedBox.shrink();
+                
+                // Determine if this is the first non-zero element to avoid drawing a top border for it
+                bool isFirstNonZero = true;
+                for (int i = 0; i < index; i++) {
+                  if (heights[i] > 0) {
+                    isFirstNonZero = false;
+                    break;
+                  }
+                }
+                
+                return Container(
+                  width: double.infinity,
+                  height: heights[index],
+                  decoration: BoxDecoration(
+                    color: colors[index % colors.length],
+                    border: isFirstNonZero ? null : const Border(top: BorderSide(color: Colors.black, width: 1.5)),
+                  ),
+                );
+              }),
+            ),
           ),
-        ),
         const SizedBox(height: 8),
         Text(
           label,
@@ -729,6 +812,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -753,59 +837,84 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   }
 
   Widget _buildPieChartCard() {
+    final categories = [
+      'Food & Dining', 'Shopping', 'Transport', 
+      'Entertainment', 'Bills & Utilities', 'Healthcare', 'Travel', 
+      'Investments', 'Transfers', 'Subscriptions', 'Others'
+    ];
+    
     Map<String, double> categoryTotals = {
-      'TECH': 0,
-      'FOOD': 0,
-      'LIFE': 0,
+      for (var cat in categories) cat: 0.0
     };
+    
     for (var t in _transactions) {
       final String type = (t['type'] ?? 'debit').toString().toLowerCase();
       if (type == 'credit') continue;
       
-      final category = (t['category'] ?? '').toString().toLowerCase();
-      final name = (t['name'] ?? '').toString().toLowerCase();
-
-      bool isFood = name.contains('zomato') || name.contains('swiggy') || ['food', 'dining'].contains(category);
-      bool isTech = name.contains('pvr') || name.contains('valve') || name.contains('amazon') || ['entertainment', 'ott', 'streaming', 'music', 'tech', 'work'].contains(category);
-
+      final String category = (t['category'] ?? '').toString().toLowerCase();
+      final String name = (t['name'] ?? '').toString().toLowerCase();
       final double amount = (t['amount'] ?? 0).toDouble();
       
-      if (isTech) {
-        categoryTotals['TECH'] = categoryTotals['TECH']! + amount;
-      } else if (isFood) {
-        categoryTotals['FOOD'] = categoryTotals['FOOD']! + amount;
+      String matchedCat = 'Others';
+      
+      if (name.contains('zomato') || name.contains('swiggy') || ['food', 'dining'].contains(category)) {
+        matchedCat = 'Food & Dining';
+      } else if (name.contains('pvr') || name.contains('valve') || name.contains('amazon') || ['entertainment', 'ott', 'streaming', 'music', 'tech', 'work'].contains(category)) {
+        matchedCat = 'Entertainment';
       } else {
-        categoryTotals['LIFE'] = categoryTotals['LIFE']! + amount;
+        for (var cat in categories) {
+          if (cat == 'Others') continue;
+          if (category == cat.toLowerCase() || category.contains(cat.toLowerCase().split(' ')[0])) {
+            matchedCat = cat;
+            break;
+          }
+        }
       }
+      
+      categoryTotals[matchedCat] = categoryTotals[matchedCat]! + amount;
     }
 
     final Map<String, Color> categoryColors = {
-      'TECH': const Color(0xFF2954FF), // Blue
-      'FOOD': const Color(0xFF9C27B0), // Purple
-      'LIFE': const Color(0xFFFFDE43), // Yellow
+      'Food & Dining': const Color(0xFF9C27B0), // Purple
+      'Shopping': const Color(0xFFE91E63), // Pink
+      'Transport': const Color(0xFF2196F3), // Blue
+      'Entertainment': const Color(0xFFFF9800), // Orange
+      'Bills & Utilities': const Color(0xFF4CAF50), // Green
+      'Healthcare': const Color(0xFFF44336), // Red
+      'Travel': const Color(0xFF00BCD4), // Cyan
+      'Investments': const Color(0xFF3F51B5), // Indigo
+      'Transfers': const Color(0xFF607D8B), // Blue Grey
+      'Subscriptions': const Color(0xFF795548), // Brown
+      'Others': const Color(0xFFFFDE43), // Yellow
     };
 
     final sortedEntries = categoryTotals.entries.where((e) => e.value > 0).toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
     List<PieChartSectionData> sections = [];
+    int index = 0;
     
     for (var entry in sortedEntries) {
+      final isTouched = index == _touchedPieIndex;
+      final double radius = isTouched ? 75.0 : 65.0;
+      final String title = isTouched ? '${entry.key}\n\₹${entry.value.toInt()}' : '\₹${entry.value.toInt()}';
+      
       sections.add(
         PieChartSectionData(
-          color: categoryColors[entry.key],
+          color: categoryColors[entry.key] ?? Colors.grey,
           value: entry.value,
-          title: '\$${entry.value.toInt()}',
+          title: title,
           titleStyle: GoogleFonts.inter(
             fontWeight: FontWeight.w900,
-            fontSize: 10,
+            fontSize: isTouched ? 12 : 10,
             color: Colors.white,
             shadows: [const Shadow(color: Colors.black, blurRadius: 2)],
           ),
-          radius: 50,
+          radius: radius,
           borderSide: const BorderSide(color: Colors.black, width: 2),
         ),
       );
+      index++;
     }
 
     if (sections.isEmpty) {
@@ -814,7 +923,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
           color: Colors.grey,
           value: 1,
           title: '',
-          radius: 50,
+          radius: 65,
           borderSide: const BorderSide(color: Colors.black, width: 2),
         )
       );
@@ -837,71 +946,45 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 16),
           SizedBox(
-            height: 160,
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black,
-                          offset: Offset(4, 4),
-                        ),
-                      ],
-                    ),
-                    child: PieChart(
-                      PieChartData(
-                        sectionsSpace: 0,
-                        centerSpaceRadius: 25,
-                        sections: sections,
-                        borderData: FlBorderData(show: false),
+            width: double.infinity,
+            child: Center(
+              child: SizedBox(
+                width: 200,
+                height: 200,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black, width: 2.5),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black,
+                        offset: Offset(4, 4),
                       ),
+                    ],
+                  ),
+                  child: PieChart(
+                    PieChartData(
+                      pieTouchData: PieTouchData(
+                        touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                          setState(() {
+                            if (!event.isInterestedForInteractions ||
+                                pieTouchResponse == null ||
+                                pieTouchResponse.touchedSection == null) {
+                              _touchedPieIndex = -1;
+                              return;
+                            }
+                            _touchedPieIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                          });
+                        },
+                      ),
+                      sectionsSpace: 0,
+                      centerSpaceRadius: 30,
+                      sections: sections,
+                      borderData: FlBorderData(show: false),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: sortedEntries.map((e) {
-                      final color = categoryColors[e.key]!;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: color,
-                                border: Border.all(color: Colors.black, width: 1.5),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                e.key,
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 10,
-                                  color: Colors.black87,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
