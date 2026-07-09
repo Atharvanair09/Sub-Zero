@@ -49,33 +49,33 @@ class IncomeSource {
 
   factory IncomeSource.fromJson(Map<String, dynamic> json) {
     return IncomeSource(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      sender: json['sender'] as String,
-      expectedAmount: (json['expectedAmount'] as num).toDouble(),
-      frequency: json['frequency'] as String,
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      name: json['name'] as String? ?? '',
+      sender: (json['expectedSender'] ?? json['sender'] ?? '').toString(),
+      expectedAmount: ((json['amount'] ?? json['expectedAmount'] ?? 0) as num).toDouble(),
+      frequency: (json['frequency'] as String?)?.toLowerCase() ?? 'monthly',
       lastReceivedDate: json['lastReceivedDate'] != null
-          ? DateTime.parse(json['lastReceivedDate'] as String)
+          ? DateTime.tryParse(json['lastReceivedDate'] as String)
           : null,
       nextExpectedDate: json['nextExpectedDate'] != null
-          ? DateTime.parse(json['nextExpectedDate'] as String)
+          ? DateTime.tryParse(json['nextExpectedDate'] as String)
           : null,
       linkedTransactionIds: List<String>.from(json['linkedTransactionIds'] ?? []),
-      isActive: json['isActive'] as bool? ?? true,
+      isActive: json['status'] != null ? (json['status'] == 'active') : (json['isActive'] as bool? ?? true),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
+      if (id.isNotEmpty && id != 'new') 'id': id,
       'name': name,
-      'sender': sender,
-      'expectedAmount': expectedAmount,
+      'expectedSender': sender,
+      'amount': expectedAmount,
       'frequency': frequency,
       'lastReceivedDate': lastReceivedDate?.toIso8601String(),
       'nextExpectedDate': nextExpectedDate?.toIso8601String(),
       'linkedTransactionIds': linkedTransactionIds,
-      'isActive': isActive,
+      'status': isActive ? 'active' : 'inactive',
     };
   }
 }

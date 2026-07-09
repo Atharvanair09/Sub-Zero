@@ -29,6 +29,26 @@ router.post('/income-sources', async (req, res) => {
   }
 });
 
+router.delete('/income-sources/:id', async (req, res) => {
+  try {
+    const result = await IncomeSource.findByIdAndDelete(req.params.id);
+    if (!result) return res.status(404).json({ success: false, error: 'Income source not found' });
+    res.json({ success: true, message: 'Income source deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/income-sources/:id', async (req, res) => {
+  try {
+    const result = await IncomeSource.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!result) return res.status(404).json({ success: false, error: 'Income source not found' });
+    res.json({ success: true, incomeSource: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // --- Savings Goals ---
 router.get('/savings-goals', async (req, res) => {
   try {

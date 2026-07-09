@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'income_models.dart';
+import 'auth_service.dart';
 
 class IncomeService extends ChangeNotifier {
   static final IncomeService instance = IncomeService._internal();
@@ -16,146 +18,95 @@ class IncomeService extends ChangeNotifier {
   List<IncomeSource> get incomeSources => _incomeSources;
   List<IncomeMatch> get pendingMatches => _pendingMatches;
 
-  static const String _sourcesKey = 'income_sources_v1';
-  static const String _matchesKey = 'income_matches_v1';
-
-  Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // Load sources
-    final sourcesJson = prefs.getStringList(_sourcesKey) ?? [];
-    _incomeSources = sourcesJson
-        .map((s) => IncomeSource.fromJson(jsonDecode(s)))
-        .toList();
-
-    // Load matches
-    final matchesJson = prefs.getStringList(_matchesKey) ?? [];
-    _pendingMatches = matchesJson
-        .map((m) => IncomeMatch.fromJson(jsonDecode(m)))
-        .toList();
-
-    notifyListeners();
+  String _getBackendUrl() {
+    if (kIsWeb) return 'http://localhost:5000';
+    if (Platform.isAndroid) return 'http://10.0.2.2:5000';
+    return 'http://localhost:5000';
   }
 
-  Future<void> _saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    final sourcesJson = _incomeSources.map((s) => jsonEncode(s.toJson())).toList();
-    await prefs.setStringList(_sourcesKey, sourcesJson);
+  Future<void> _loadData() async {
+    final userId = AuthService.instance.userId;
+    if (userId == null || userId.isEmpty) return;
 
-    final matchesJson = _pendingMatches.map((m) => jsonEncode(m.toJson())).toList();
-    await prefs.setStringList(_matchesKey, matchesJson);
-    
-    notifyListeners();
+    try {
+      final response = await http.get(Uri.parse('${_getBackendUrl()}/api/cashflow/income-sources?userId=$userId'));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        _incomeSources = data.map((json) => IncomeSource.fromJson(json)).toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading income sources: $e');
+    }
   }
 
   Future<void> addIncomeSource(IncomeSource source) async {
-    _incomeSources.add(source);
-    await _saveData();
+    final userId = AuthService.instance.userId;
+    if (userId == null || userId.isEmpty) return;
+
+    try {
+      final sourceJson = source.toJson();
+      sourceJson['userId'] = userId;
+      
+      final response = await http.post(
+        Uri.parse('${_getBackendUrl()}/api/cashflow/income-sources'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(sourceJson),
+      );
+      
+      if (response.statusCode == 200) {
+        await _loadData();
+      }
+    } catch (e) {
+      debugPrint('Error adding income source: $e');
+    }
   }
 
   Future<void> updateIncomeSource(IncomeSource updatedSource) async {
-    final index = _incomeSources.indexWhere((s) => s.id == updatedSource.id);
-    if (index != -1) {
-      _incomeSources[index] = updatedSource;
-      await _saveData();
+    try {
+      final response = await http.put(
+        Uri.parse('${_getBackendUrl()}/api/cashflow/income-sources/${updatedSource.id}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(updatedSource.toJson()),
+      );
+      
+      if (response.statusCode == 200) {
+        await _loadData();
+      }
+    } catch (e) {
+      debugPrint('Error updating income source: $e');
     }
   }
 
   Future<void> deleteIncomeSource(String id) async {
-    _incomeSources.removeWhere((s) => s.id == id);
-    _pendingMatches.removeWhere((m) => m.incomeSourceId == id);
-    await _saveData();
+    try {
+      final response = await http.delete(
+        Uri.parse('${_getBackendUrl()}/api/cashflow/income-sources/$id'),
+      );
+      
+      if (response.statusCode == 200) {
+        await _loadData();
+      }
+    } catch (e) {
+      debugPrint('Error deleting income source: $e');
+    }
   }
 
   /// Processes new transactions to see if they match any income source.
   /// Unmatched transactions are returned to be processed as normal credits.
   Future<List<Map<String, dynamic>>> matchNewTransactions(List<Map<String, dynamic>> newTransactions) async {
-    List<Map<String, dynamic>> unmatched = [];
-    bool hasNewMatches = false;
-
-    for (var tx in newTransactions) {
-      String id = tx['_id']?.toString() ?? '';
-      if (id.isEmpty) {
-        unmatched.add(tx);
-        continue;
-      }
-
-      String type = (tx['type'] as String?)?.toLowerCase() ?? 'debit';
-      if (type != 'credit') {
-        unmatched.add(tx);
-        continue;
-      }
-
-      // Check if already matched
-      if (_pendingMatches.any((m) => m.transactionId == id) ||
-          _incomeSources.any((s) => s.linkedTransactionIds.contains(id))) {
-        continue; // Already processed
-      }
-
-      double amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-      String sender = (tx['name'] as String?) ?? '';
-
-      // Find an exact match for Sender and Amount
-      IncomeSource? matchedSource;
-      try {
-        matchedSource = _incomeSources.firstWhere(
-          (s) => s.isActive &&
-                 s.sender.toLowerCase() == sender.toLowerCase() &&
-                 (s.expectedAmount - amount).abs() < 0.01,
-        );
-      } catch (e) {
-        matchedSource = null;
-      }
-
-      if (matchedSource != null) {
-        _pendingMatches.add(IncomeMatch(
-          transactionId: id,
-          incomeSourceId: matchedSource.id,
-          transactionData: tx,
-        ));
-        hasNewMatches = true;
-      } else {
-        unmatched.add(tx);
-      }
-    }
-
-    if (hasNewMatches) {
-      await _saveData();
-    }
-
-    return unmatched;
+    // The backend natively processes this during gmail scan now, so we can just return unmatched.
+    // We retain this method signature so UI components don't break.
+    return newTransactions;
   }
 
   Future<void> confirmMatch(String transactionId) async {
-    final matchIndex = _pendingMatches.indexWhere((m) => m.transactionId == transactionId);
-    if (matchIndex != -1) {
-      final match = _pendingMatches[matchIndex];
-      final sourceIndex = _incomeSources.indexWhere((s) => s.id == match.incomeSourceId);
-      
-      if (sourceIndex != -1) {
-        final source = _incomeSources[sourceIndex];
-        final updatedIds = List<String>.from(source.linkedTransactionIds)..add(transactionId);
-        
-        DateTime? receivedDate;
-        if (match.transactionData['date'] != null) {
-          receivedDate = DateTime.tryParse(match.transactionData['date']);
-        }
-        receivedDate ??= DateTime.now();
-
-        _incomeSources[sourceIndex] = source.copyWith(
-          linkedTransactionIds: updatedIds,
-          lastReceivedDate: receivedDate,
-        );
-      }
-      
-      _pendingMatches.removeAt(matchIndex);
-      await _saveData();
-    }
+    _pendingMatches.removeWhere((m) => m.transactionId == transactionId);
+    notifyListeners();
   }
 
   Future<void> rejectMatch(String transactionId) async {
     _pendingMatches.removeWhere((m) => m.transactionId == transactionId);
-    await _saveData();
+    notifyListeners();
   }
 }
