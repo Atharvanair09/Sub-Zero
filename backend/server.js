@@ -858,6 +858,48 @@ app.get("/api/gmail/scan", async (req, res) => {
                    }
                  }
                  // If existingCycle exists, it's treated as normal credit.
+               } else {
+                 // Time-based heuristic fallback if sender didn't match
+                 for (const s of sources) {
+                   const lastCycle = await IncomeCycle.findOne({ incomeSourceId: s._id, status: 'processed' }).sort({ cycleDate: -1 });
+                   if (lastCycle) {
+                     const daysDiff = (emailDate.getTime() - new Date(lastCycle.cycleDate).getTime()) / (1000 * 3600 * 24);
+                     let isTimeMatch = false;
+                     
+                     if (s.frequency === 'monthly' && daysDiff >= 26 && daysDiff <= 35) {
+                       isTimeMatch = true;
+                     } else if (s.frequency === 'weekly' && daysDiff >= 5 && daysDiff <= 9) {
+                       isTimeMatch = true;
+                     } else if (s.frequency === 'biweekly' && daysDiff >= 12 && daysDiff <= 16) {
+                       isTimeMatch = true;
+                     }
+                     
+                     if (isTimeMatch) {
+                       const cycleId = IncomeCycle.getCycleIdentifier(s.frequency, emailDate);
+                       const existingCycle = await IncomeCycle.findOne({ 
+                         incomeSourceId: s._id, 
+                         cycleIdentifier: cycleId, 
+                         status: 'processed' 
+                       });
+                       
+                       if (!existingCycle) {
+                         await Notification.findOneAndUpdate(
+                           { userId, type: 'income_verification', transactionId: newTxn._id },
+                           { 
+                             title: `Potential Income Detected`,
+                             message: `Received ₹${numericPrice} from ${vendorName}. It's time for your ${s.name} income. Is this it?`,
+                             priority: 'high',
+                             transactionId: newTxn._id,
+                             incomeSourceId: s._id,
+                             metaData: { cycleIdentifier: cycleId, expectedAmount: s.amount, transactionAmount: numericPrice }
+                           },
+                           { upsert: true }
+                         );
+                         break; // Stop after finding the first probable time-based match
+                       }
+                     }
+                   }
+                 }
                }
              }
            }
