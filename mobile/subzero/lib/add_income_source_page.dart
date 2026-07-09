@@ -106,6 +106,8 @@ class _AddIncomeSourcePageState extends State<AddIncomeSourcePage> {
   }
 
   void _saveIncomeSource() async {
+    FocusScope.of(context).unfocus();
+
     final name = _nameController.text.trim();
     final sender = _senderController.text.trim();
     final amountText = _amountController.text.replaceAll(',', '');
@@ -139,40 +141,60 @@ class _AddIncomeSourcePageState extends State<AddIncomeSourcePage> {
       name: name,
       sender: sender,
       expectedAmount: amount,
-      frequency: _frequency,
+      frequency: _frequency.toLowerCase(),
       nextExpectedDate: _expectedDate,
       lastReceivedDate: widget.existingSource?.lastReceivedDate,
       linkedTransactionIds: widget.existingSource?.linkedTransactionIds ?? [],
       isActive: widget.existingSource?.isActive ?? true,
     );
 
-    if (widget.existingSource != null) {
-      await IncomeService.instance.updateIncomeSource(newSource);
-    } else {
-      await IncomeService.instance.addIncomeSource(newSource);
-    }
+    try {
+      if (widget.existingSource != null) {
+        await IncomeService.instance.updateIncomeSource(newSource);
+      } else {
+        await IncomeService.instance.addIncomeSource(newSource);
+      }
 
-    if (mounted) {
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.existingSource != null ? 'INCOME SOURCE UPDATED' : 'INCOME SOURCE ADDED',
-            style: GoogleFonts.inter(
-              color: Colors.black,
-              fontWeight: FontWeight.w900,
-              fontSize: 14,
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.existingSource != null ? 'INCOME SOURCE UPDATED' : 'INCOME SOURCE ADDED',
+              style: GoogleFonts.inter(
+                color: Colors.black,
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+              ),
             ),
+            backgroundColor: const Color(0xFF9AFF00),
+            behavior: SnackBarBehavior.floating,
+            shape: const RoundedRectangleBorder(
+              side: BorderSide(color: Colors.black, width: 2),
+              borderRadius: BorderRadius.zero,
+            ),
+            margin: const EdgeInsets.all(16),
           ),
-          backgroundColor: const Color(0xFF9AFF00),
-          behavior: SnackBarBehavior.floating,
-          shape: const RoundedRectangleBorder(
-            side: BorderSide(color: Colors.black, width: 2),
-            borderRadius: BorderRadius.zero,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'ERROR SAVING: ${e.toString().replaceAll('Exception: ', '')}',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+              ),
+            ),
+            backgroundColor: const Color(0xFFE50000),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
           ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -385,24 +407,27 @@ class _AddIncomeSourcePageState extends State<AddIncomeSourcePage> {
               color: Colors.white,
               border: Border(top: BorderSide(color: Colors.black, width: 2)),
             ),
-            child: GestureDetector(
-              onTap: _saveIncomeSource,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF9AFF00),
-                  border: Border.all(color: Colors.black, width: 3),
-                  boxShadow: const [BoxShadow(color: Colors.black, offset: Offset(6, 6))],
-                ),
-                child: Center(
-                  child: Text(
-                    'SAVE INCOME SOURCE',
-                    style: GoogleFonts.inter(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      letterSpacing: 1.5,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _saveIncomeSource,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9AFF00),
+                    border: Border.all(color: Colors.black, width: 3),
+                    boxShadow: const [BoxShadow(color: Colors.black, offset: Offset(6, 6))],
+                  ),
+                  child: Center(
+                    child: Text(
+                      'SAVE INCOME SOURCE',
+                      style: GoogleFonts.inter(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        letterSpacing: 1.5,
+                      ),
                     ),
                   ),
                 ),

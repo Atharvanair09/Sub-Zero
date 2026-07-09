@@ -56,9 +56,12 @@ class IncomeService extends ChangeNotifier {
       
       if (response.statusCode == 200) {
         await _loadData();
+      } else {
+        throw Exception(jsonDecode(response.body)['error'] ?? 'Server error');
       }
     } catch (e) {
       debugPrint('Error adding income source: $e');
+      rethrow;
     }
   }
 
@@ -72,9 +75,12 @@ class IncomeService extends ChangeNotifier {
       
       if (response.statusCode == 200) {
         await _loadData();
+      } else {
+        throw Exception(jsonDecode(response.body)['error'] ?? 'Server error');
       }
     } catch (e) {
       debugPrint('Error updating income source: $e');
+      rethrow;
     }
   }
 
@@ -86,9 +92,12 @@ class IncomeService extends ChangeNotifier {
       
       if (response.statusCode == 200) {
         await _loadData();
+      } else {
+        throw Exception(jsonDecode(response.body)['error'] ?? 'Server error');
       }
     } catch (e) {
       debugPrint('Error deleting income source: $e');
+      rethrow;
     }
   }
 
