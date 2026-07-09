@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const incomeSourceSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
+  expectedSender: { type: String },
   amount: { type: Number, required: true },
   frequency: { type: String, enum: ['weekly', 'biweekly', 'monthly', 'yearly'], default: 'monthly' },
   nextExpectedDate: { type: Date },

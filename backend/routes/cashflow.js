@@ -129,21 +129,38 @@ router.get('/summary', async (req, res) => {
   const { userId } = req.query;
   try {
     const incomeSources = await IncomeSource.find({ userId, status: 'active' });
-    let totalIncome = incomeSources.reduce((sum, src) => sum + src.amount, 0);
+    const IncomeCycle = require('../models/IncomeCycle');
+    
+    let totalIncome = 0;
+    let totalAllocations = 0;
+    
+    for (let src of incomeSources) {
+       const cycleId = IncomeCycle.getCycleIdentifier(src.frequency, new Date());
+       const confirmedCycle = await IncomeCycle.findOne({
+           incomeSourceId: src._id,
+           cycleIdentifier: cycleId,
+           status: 'processed'
+       });
+       
+       let incomeForSource = src.amount;
+       if (confirmedCycle) {
+           incomeForSource = confirmedCycle.actualAmount;
+       }
+       totalIncome += incomeForSource;
+       
+       // Allocations
+       const allocations = await GoalAllocation.find({ incomeSourceId: src._id, status: 'active' });
+       for (let alloc of allocations) {
+           if (alloc.allocationType === 'fixed') {
+               totalAllocations += alloc.amountOrPercentage;
+           } else {
+               totalAllocations += (incomeForSource * alloc.amountOrPercentage) / 100;
+           }
+       }
+    }
 
     const budgets = await CategoryBudget.find({ userId });
     let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
-
-    const allocations = await GoalAllocation.find({ userId, status: 'active' }).populate('incomeSourceId');
-    let totalAllocations = 0;
-    for (let alloc of allocations) {
-      if (!alloc.incomeSourceId) continue;
-      if (alloc.allocationType === 'fixed') {
-        totalAllocations += alloc.amountOrPercentage;
-      } else {
-        totalAllocations += (alloc.incomeSourceId.amount * alloc.amountOrPercentage) / 100;
-      }
-    }
 
     // Get current month expenses
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -184,7 +201,7 @@ router.get('/summary', async (req, res) => {
 
 // API to manually trigger an income cycle for a transaction (called when user confirms)
 router.post('/process-cycle', async (req, res) => {
-  const { userId, transactionId, incomeSourceId } = req.body;
+  const { userId, transactionId, incomeSourceId, choice } = req.body; // choice: 'use_transaction', 'use_expected', 'ignore', or undefined
   
   try {
     const txn = await Transaction.findById(transactionId);
@@ -192,12 +209,41 @@ router.post('/process-cycle', async (req, res) => {
 
     if (!txn || !source) return res.status(404).json({ error: "Transaction or Income Source not found" });
 
+    const IncomeCycle = require('../models/IncomeCycle');
+    const cycleId = IncomeCycle.getCycleIdentifier(source.frequency, txn.date || new Date());
+
+    // Validation: Ensure this cycle wasn't already processed
+    const existingCycle = await IncomeCycle.findOne({ 
+       incomeSourceId: source._id, 
+       cycleIdentifier: cycleId, 
+       status: 'processed' 
+    });
+
+    if (existingCycle) {
+       return res.status(400).json({ success: false, error: "An income has already been confirmed for this cycle." });
+    }
+
+    if (choice === 'ignore') {
+       // Mark notification as read and treat as regular credit
+       const Notification = require('../models/Notification');
+       await Notification.updateMany(
+          { transactionId: txn._id, type: { $in: ['income_verification', 'income_detected'] } },
+          { $set: { read: true } }
+       );
+       return res.json({ success: true, message: "Transaction ignored as regular credit." });
+    }
+
+    let actualAmount = txn.amount;
+    if (choice === 'use_expected') {
+       actualAmount = source.amount;
+    }
+
     // Calculate total allocations
     const allocations = await GoalAllocation.find({ incomeSourceId, status: 'active' });
     let totalAllocations = 0;
     
     for (let alloc of allocations) {
-      const amountToAdd = alloc.allocationType === 'fixed' ? alloc.amountOrPercentage : (source.amount * alloc.amountOrPercentage) / 100;
+      const amountToAdd = alloc.allocationType === 'fixed' ? alloc.amountOrPercentage : (actualAmount * alloc.amountOrPercentage) / 100;
       totalAllocations += amountToAdd;
       
       // Update actual goal balance
@@ -214,14 +260,24 @@ router.post('/process-cycle', async (req, res) => {
       userId,
       incomeSourceId,
       transactionId,
+      cycleIdentifier: cycleId,
       cycleDate: txn.date || new Date(),
-      totalIncome: source.amount,
+      actualAmount: actualAmount,
+      expectedAmount: source.amount,
       goalAllocations: totalAllocations,
       budgetReservations: budgetReservations,
-      totalExpenses: 0 // at cycle start
+      totalExpenses: 0, // at cycle start
+      status: 'processed'
     });
 
     await cycle.save();
+    
+    const Notification = require('../models/Notification');
+    await Notification.updateMany(
+       { transactionId: txn._id, type: { $in: ['income_verification', 'income_detected'] } },
+       { $set: { read: true } }
+    );
+
     res.json({ success: true, cycle });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

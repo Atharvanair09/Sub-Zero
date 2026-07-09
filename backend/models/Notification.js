@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['renewal', 'price_increase', 'usage_alert', 'recommendation', 'income_detected'],
+    enum: ['renewal', 'price_increase', 'usage_alert', 'recommendation', 'income_detected', 'income_verification'],
     required: true
   },
   title: {
@@ -34,6 +34,9 @@ const notificationSchema = new mongoose.Schema({
   read: {
     type: Boolean,
     default: false
+  },
+  metaData: {
+    type: mongoose.Schema.Types.Mixed
   },
   priority: {
     type: String,

@@ -811,22 +811,53 @@ app.get("/api/gmail/scan", async (req, res) => {
              // Check if it matches an Income Source
              if (type === 'credit') {
                const IncomeSource = mongoose.model('IncomeSource');
+               const IncomeCycle = mongoose.model('IncomeCycle');
+               const Notification = mongoose.model('Notification');
                const sources = await IncomeSource.find({ userId, status: 'active' });
-               const match = sources.find(s => Math.abs(s.amount - numericPrice) <= 100);
+               
+               const match = sources.find(s => {
+                 const expectedSender = (s.expectedSender || s.name).toLowerCase();
+                 return vendorName.toLowerCase().includes(expectedSender) || expectedSender.includes(vendorName.toLowerCase());
+               });
                
                if (match) {
-                 const Notification = mongoose.model('Notification');
-                 await Notification.findOneAndUpdate(
-                   { userId, type: 'income_detected', transactionId: newTxn._id },
-                   { 
-                     title: `Income Detected: ₹${numericPrice}`,
-                     message: `Matches your "${match.name}" income source. Tap to allocate to goals.`,
-                     priority: 'high',
-                     transactionId: newTxn._id,
-                     incomeSourceId: match._id
-                   },
-                   { upsert: true }
-                 );
+                 const cycleId = IncomeCycle.getCycleIdentifier(match.frequency, emailDate);
+                 const existingCycle = await IncomeCycle.findOne({ 
+                   incomeSourceId: match._id, 
+                   cycleIdentifier: cycleId, 
+                   status: 'processed' 
+                 });
+                 
+                 if (!existingCycle) {
+                   if (Math.abs(match.amount - numericPrice) > 100) {
+                     await Notification.findOneAndUpdate(
+                       { userId, type: 'income_verification', transactionId: newTxn._id },
+                       { 
+                         title: `Unusual Income Amount`,
+                         message: `Received ₹${numericPrice} from ${vendorName}. Expected ₹${match.amount}. Is this your ${match.name} income?`,
+                         priority: 'high',
+                         transactionId: newTxn._id,
+                         incomeSourceId: match._id,
+                         metaData: { cycleIdentifier: cycleId, expectedAmount: match.amount, transactionAmount: numericPrice }
+                       },
+                       { upsert: true }
+                     );
+                   } else {
+                     await Notification.findOneAndUpdate(
+                       { userId, type: 'income_detected', transactionId: newTxn._id },
+                       { 
+                         title: `Income Detected: ₹${numericPrice}`,
+                         message: `Matches your "${match.name}" income source. Tap to confirm and allocate.`,
+                         priority: 'high',
+                         transactionId: newTxn._id,
+                         incomeSourceId: match._id,
+                         metaData: { cycleIdentifier: cycleId, expectedAmount: match.amount, transactionAmount: numericPrice }
+                       },
+                       { upsert: true }
+                     );
+                   }
+                 }
+                 // If existingCycle exists, it's treated as normal credit.
                }
              }
            }
