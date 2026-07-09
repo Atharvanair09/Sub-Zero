@@ -948,7 +948,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
           SizedBox(
             width: double.infinity,
             child: Center(
-              child: SizedBox(
+              child: SizedBox(  
                 width: 200,
                 height: 200,
                 child: Container(

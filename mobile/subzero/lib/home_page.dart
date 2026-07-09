@@ -12,6 +12,9 @@ import 'add_transaction_page.dart';
 import 'budget_overview_page.dart';
 import 'financial_health_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'income_models.dart';
+import 'income_service.dart';
+import 'add_income_source_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -26,6 +29,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Timer? _fetchTimer;
   bool _isFirstRun = false;
   List<dynamic> _recentTransactions = [];
+  Map<String, dynamic>? _cashFlowSummary;
 
   @override
   void initState() {
@@ -33,17 +37,36 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _loadBalanceData().then((_) {
       _fetchTransactions();
+      _fetchCashFlowSummary();
     });
     _fetchTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       _fetchTransactions();
+      _fetchCashFlowSummary();
     });
+    IncomeService.instance.addListener(_onServiceUpdate);
+  }
+
+  Future<void> _fetchCashFlowSummary() async {
+    final userId = AuthService.instance.userId ?? '';
+    if (userId.isEmpty) return;
+    try {
+      final response = await http.get(Uri.parse('${_getBackendUrl()}/api/cashflow/summary?userId=$userId'));
+      if (response.statusCode == 200) {
+        if (mounted) setState(() => _cashFlowSummary = jsonDecode(response.body));
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _fetchTimer?.cancel();
+    IncomeService.instance.removeListener(_onServiceUpdate);
     super.dispose();
+  }
+
+  void _onServiceUpdate() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -131,6 +154,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> processNewTransactions(List<Map<String, dynamic>> newTransactions) async {
     final prefs = await SharedPreferences.getInstance();
     bool balanceChanged = false;
+
+    // Check for matches first
+    await IncomeService.instance.matchNewTransactions(newTransactions);
 
     for (var tx in newTransactions) {
       String id = tx['_id']?.toString() ?? '';
@@ -285,6 +311,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: 24),
+
+              if (IncomeService.instance.pendingMatches.isNotEmpty)
+                _buildPendingMatchBanner(),
+              
+              if (IncomeService.instance.incomeSources.isEmpty)
+                _buildAddIncomeSourceButton(),
+
               // Action Buttons Row
               Row(
                 children: [
@@ -335,6 +368,51 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ],
               ),
               const SizedBox(height: 24),
+              // Cash Flow Summary Card
+              if (_cashFlowSummary != null)
+                _buildNeobrutalistCard(
+                  color: const Color(0xFFC6FF00),
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('AVAILABLE TO SPEND', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 1)),
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatBalance((_cashFlowSummary!['remainingAvailableIncome'] ?? 0).toDouble()),
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 40, letterSpacing: -1),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('ALLOCATED', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold)),
+                              Text('₹${(_cashFlowSummary!['totalAllocations'] ?? 0).toInt()}', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w900)),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('BUDGETS', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold)),
+                              Text('₹${(_cashFlowSummary!['budgetReservations'] ?? 0).toInt()}', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w900)),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('EXPENSES', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold)),
+                              Text('₹${(_cashFlowSummary!['totalExpenses'] ?? 0).toInt()}', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w900)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              if (_cashFlowSummary != null) const SizedBox(height: 24),
               // AI Insight Card
               _buildNeobrutalistCard(
                 color: const Color(0xFF9AFF00),
@@ -657,6 +735,161 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPendingMatchBanner() {
+    final matches = IncomeService.instance.pendingMatches;
+    if (matches.isEmpty) return const SizedBox.shrink();
+    final match = matches.first;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF0D4),
+        border: Border.all(color: Colors.black, width: 2.5),
+        boxShadow: const [BoxShadow(color: Colors.black, offset: Offset(6, 6))],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.black),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'INCOME MATCH FOUND',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              Text(
+                '${matches.length} pending',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 10,
+                  color: Colors.black54,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Transaction of ₹${(match.transactionData['amount'] as num?)?.toDouble() ?? 0} from ${match.transactionData['name'] ?? ''} matches your income source.',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    await IncomeService.instance.rejectMatch(match.transactionId);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.black, width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'REJECT',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    await IncomeService.instance.confirmMatch(match.transactionId);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9AFF00),
+                      border: Border.all(color: Colors.black, width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'CONFIRM',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddIncomeSourceButton() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const AddIncomeSourcePage()),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        decoration: BoxDecoration(
+          color: const Color(0xFFD6FFD6),
+          border: Border.all(color: Colors.black, width: 2.5),
+          boxShadow: const [BoxShadow(color: Colors.black, offset: Offset(6, 6))],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9AFF00),
+                border: Border.all(color: Colors.black, width: 2),
+              ),
+              child: const Icon(Icons.add_circle_outline, color: Colors.black),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ADD INCOME SOURCE',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Automate your budgeting',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

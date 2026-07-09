@@ -6,6 +6,7 @@ import 'login_screen.dart';
 import 'home_page.dart';
 import 'goals_page.dart';
 import 'gmail_connect_page.dart';
+import 'income_sources_list_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -168,6 +169,15 @@ class _ProfilePageState extends State<ProfilePage> {
                   _buildListItem(title: 'EDIT PROFILE'),
                   const SizedBox(height: 8),
                   _buildListItem(title: 'LINKED ACCOUNTS'),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const IncomeSourcesListPage()),
+                      );
+                    },
+                    child: _buildListItem(title: 'INCOME SOURCES'),
+                  ),
                   const SizedBox(height: 8),
                   _buildListItem(title: 'DOCUMENT VAULT'),
                 ],

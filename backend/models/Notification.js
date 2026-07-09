@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['renewal', 'price_increase', 'usage_alert', 'recommendation'],
+    enum: ['renewal', 'price_increase', 'usage_alert', 'recommendation', 'income_detected'],
     required: true
   },
   title: {
@@ -22,6 +22,14 @@ const notificationSchema = new mongoose.Schema({
   subscriptionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subscription'
+  },
+  transactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction'
+  },
+  incomeSourceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'IncomeSource'
   },
   read: {
     type: Boolean,

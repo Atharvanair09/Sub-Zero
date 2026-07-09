@@ -52,6 +52,7 @@ mongoose.connect(MONGODB_URI)
   .catch((err) => console.error("❌ Checkpoint: Could not connect to MongoDB Atlas", err));
 
 // Routes
+app.use('/api/cashflow', require('./routes/cashflow'));
 app.post("/api/subscriptions", async (req, res) => {
   const { userId, name, price, plan, logo, color, category, billingCycle, nextBillingDate, externalId, type } = req.body;
   
@@ -806,6 +807,28 @@ app.get("/api/gmail/scan", async (req, res) => {
                date: emailDate
              });
              await newTxn.save();
+
+             // Check if it matches an Income Source
+             if (type === 'credit') {
+               const IncomeSource = mongoose.model('IncomeSource');
+               const sources = await IncomeSource.find({ userId, status: 'active' });
+               const match = sources.find(s => Math.abs(s.amount - numericPrice) <= 100);
+               
+               if (match) {
+                 const Notification = mongoose.model('Notification');
+                 await Notification.findOneAndUpdate(
+                   { userId, type: 'income_detected', transactionId: newTxn._id },
+                   { 
+                     title: `Income Detected: ₹${numericPrice}`,
+                     message: `Matches your "${match.name}" income source. Tap to allocate to goals.`,
+                     priority: 'high',
+                     transactionId: newTxn._id,
+                     incomeSourceId: match._id
+                   },
+                   { upsert: true }
+                 );
+               }
+             }
            }
 
            detected.push({
