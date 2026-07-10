@@ -16,25 +16,7 @@ function validateTransactionEmail(subject, snippet, fullBody) {
         return keywords.some(keyword => textToScan.includes(keyword.toLowerCase()));
     };
 
-    // 1. Check for Reminders / Due Notices (Highest Priority)
-    if (containsKeyword(VALIDATION_RULES.REMINDER)) {
-        return {
-            isValidTransaction: false,
-            classification: 'REMINDER',
-            reason: 'Contains payment reminder or due notice keywords.'
-        };
-    }
-
-    // 2. Check for Promotional Content
-    if (containsKeyword(VALIDATION_RULES.PROMOTIONAL)) {
-        return {
-            isValidTransaction: false,
-            classification: 'PROMOTIONAL',
-            reason: 'Contains promotional or marketing keywords.'
-        };
-    }
-
-    // 3. Check for OTPs
+    // 1. Check for OTPs
     if (containsKeyword(VALIDATION_RULES.OTP)) {
         return {
             isValidTransaction: false,
@@ -43,7 +25,7 @@ function validateTransactionEmail(subject, snippet, fullBody) {
         };
     }
 
-    // 4. Check for Account Notifications
+    // 2. Check for Account Notifications
     if (containsKeyword(VALIDATION_RULES.ACCOUNT_NOTIFICATION)) {
         return {
             isValidTransaction: false,
@@ -52,12 +34,30 @@ function validateTransactionEmail(subject, snippet, fullBody) {
         };
     }
 
-    // 5. Check for Evidence of a Completed Transaction
+    // 3. Check for Evidence of a Completed Transaction
     if (containsKeyword(VALIDATION_RULES.COMPLETED_TRANSACTION)) {
         return {
             isValidTransaction: true,
             classification: 'COMPLETED_TRANSACTION',
             reason: 'Contains evidence of a completed financial transaction.'
+        };
+    }
+
+    // 4. Check for Reminders / Due Notices
+    if (containsKeyword(VALIDATION_RULES.REMINDER)) {
+        return {
+            isValidTransaction: false,
+            classification: 'REMINDER',
+            reason: 'Contains payment reminder or due notice keywords.'
+        };
+    }
+
+    // 5. Check for Promotional Content
+    if (containsKeyword(VALIDATION_RULES.PROMOTIONAL)) {
+        return {
+            isValidTransaction: false,
+            classification: 'PROMOTIONAL',
+            reason: 'Contains promotional or marketing keywords.'
         };
     }
 
