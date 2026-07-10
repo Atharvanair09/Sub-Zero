@@ -85,12 +85,22 @@ class IncomeMatch {
   final String incomeSourceId;
   final Map<String, dynamic> transactionData;
   final DateTime matchDate;
+  final String? notificationType;
+  final double? expectedAmount;
+  final double? transactionAmount;
+  final String? title;
+  final String? message;
 
   IncomeMatch({
     required this.transactionId,
     required this.incomeSourceId,
     required this.transactionData,
     DateTime? matchDate,
+    this.notificationType,
+    this.expectedAmount,
+    this.transactionAmount,
+    this.title,
+    this.message,
   }) : matchDate = matchDate ?? DateTime.now();
 
   factory IncomeMatch.fromJson(Map<String, dynamic> json) {
@@ -101,6 +111,11 @@ class IncomeMatch {
       matchDate: json['matchDate'] != null
           ? DateTime.parse(json['matchDate'] as String)
           : DateTime.now(),
+      notificationType: json['notificationType'] as String?,
+      expectedAmount: json['expectedAmount'] != null ? (json['expectedAmount'] as num).toDouble() : null,
+      transactionAmount: json['transactionAmount'] != null ? (json['transactionAmount'] as num).toDouble() : null,
+      title: json['title'] as String?,
+      message: json['message'] as String?,
     );
   }
 
@@ -110,6 +125,11 @@ class IncomeMatch {
       'incomeSourceId': incomeSourceId,
       'transactionData': transactionData,
       'matchDate': matchDate.toIso8601String(),
+      if (notificationType != null) 'notificationType': notificationType,
+      if (expectedAmount != null) 'expectedAmount': expectedAmount,
+      if (transactionAmount != null) 'transactionAmount': transactionAmount,
+      if (title != null) 'title': title,
+      if (message != null) 'message': message,
     };
   }
 }

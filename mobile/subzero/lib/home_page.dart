@@ -77,15 +77,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   String _getBackendUrl() {
-    if (kIsWeb) {
-      return 'http://localhost:5000';
-    }
-    try {
-      if (Platform.isAndroid) {
-        return 'http://10.0.2.2:5000';
-      }
-    } catch (_) {}
-    return 'http://localhost:5000';
+    return 'https://sub-zero-50le.onrender.com';
   }
 
   Future<void> _fetchTransactions() async {
@@ -744,6 +736,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (matches.isEmpty) return const SizedBox.shrink();
     final match = matches.first;
 
+    final tAmount = (match.transactionAmount ?? match.transactionData['amount'] ?? 0).toDouble();
+    final eAmount = (match.expectedAmount ?? 0).toDouble();
+    final vendor = match.transactionData['name'] ?? '';
+
+    final isUnusualAmount = eAmount > 0 && (tAmount - eAmount).abs() > 100;
+
+    final titleText = match.title?.toUpperCase() ?? (isUnusualAmount ? 'UNUSUAL INCOME AMOUNT' : 'INCOME MATCH FOUND');
+    final descriptionText = match.message ?? (isUnusualAmount 
+        ? 'Transaction of ₹$tAmount from $vendor is unusual compared to your expected ₹$eAmount income. Does this contain your monthly income?'
+        : 'Transaction of ₹$tAmount from $vendor matches your income source.');
+    final confirmText = isUnusualAmount ? 'YES, USE ₹$eAmount' : 'CONFIRM';
+    final rejectText = isUnusualAmount ? 'NO' : 'REJECT';
+    final confirmChoice = isUnusualAmount ? 'use_expected' : 'use_transaction';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
@@ -761,7 +767,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'INCOME MATCH FOUND',
+                  titleText,
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w900,
                     fontSize: 14,
@@ -781,7 +787,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 12),
           Text(
-            'Transaction of ₹${(match.transactionData['amount'] as num?)?.toDouble() ?? 0} from ${match.transactionData['name'] ?? ''} matches your income source.',
+            descriptionText,
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w500,
               fontSize: 13,
@@ -803,7 +809,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     child: Center(
                       child: Text(
-                        'REJECT',
+                        rejectText,
                         style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                     ),
@@ -814,7 +820,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Expanded(
                 child: GestureDetector(
                   onTap: () async {
-                    await IncomeService.instance.confirmMatch(match.transactionId);
+                    await IncomeService.instance.confirmMatch(match.transactionId, choice: confirmChoice);
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -824,7 +830,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     child: Center(
                       child: Text(
-                        'CONFIRM',
+                        confirmText,
                         style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                     ),

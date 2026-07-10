@@ -291,6 +291,12 @@ router.post('/process-cycle', async (req, res) => {
     });
 
     await cycle.save();
+
+    // Update the IncomeSource's lastReceivedDate if the transaction is newer
+    if (!source.lastReceivedDate || new Date(txn.date) > new Date(source.lastReceivedDate)) {
+      source.lastReceivedDate = txn.date;
+      await source.save();
+    }
     
     const Notification = require('../models/Notification');
     await Notification.updateMany(

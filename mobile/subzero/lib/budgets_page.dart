@@ -28,11 +28,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
   }
 
   String _getBackendUrl() {
-    if (kIsWeb) return 'http://localhost:5000';
-    try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:5000';
-    } catch (_) {}
-    return 'http://localhost:5000';
+    return 'https://sub-zero-50le.onrender.com';
   }
 
   Future<void> _fetchSummary() async {

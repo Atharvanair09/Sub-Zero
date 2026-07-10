@@ -64,15 +64,7 @@ class _GoalsPageState extends State<GoalsPage> with WidgetsBindingObserver {
   }
 
   String _getBackendUrl() {
-    if (kIsWeb) {
-      return 'http://localhost:5000';
-    }
-    try {
-      if (Platform.isAndroid) {
-        return 'http://10.0.2.2:5000';
-      }
-    } catch (_) {}
-    return 'http://localhost:5000';
+    return 'https://sub-zero-50le.onrender.com';
   }
 
   Future<http.Response> _apiCall(String path, {String method = 'GET'}) async {

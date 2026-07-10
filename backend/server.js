@@ -52,6 +52,46 @@ mongoose.connect(MONGODB_URI)
   .catch((err) => console.error("❌ Checkpoint: Could not connect to MongoDB Atlas", err));
 
 // Routes
+async function autoProcessPastCycle(userId, transactionId, source, txnDate, actualAmount, cycleId) {
+    const IncomeCycle = require('./models/IncomeCycle');
+    const GoalAllocation = require('./models/GoalAllocation');
+    const SavingsGoal = require('./models/SavingsGoal');
+    const CategoryBudget = require('./models/CategoryBudget');
+    const IncomeSource = mongoose.model('IncomeSource');
+
+    const allocations = await GoalAllocation.find({ incomeSourceId: source._id, status: 'active' });
+    let totalAllocations = 0;
+    
+    for (let alloc of allocations) {
+      const amountToAdd = alloc.allocationType === 'fixed' ? alloc.amountOrPercentage : (actualAmount * alloc.amountOrPercentage) / 100;
+      totalAllocations += amountToAdd;
+      await SavingsGoal.findByIdAndUpdate(alloc.goalId, { $inc: { currentAmount: amountToAdd } });
+    }
+
+    const budgets = await CategoryBudget.find({ userId });
+    let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
+
+    const cycle = new IncomeCycle({
+      userId,
+      incomeSourceId: source._id,
+      transactionId,
+      cycleIdentifier: cycleId,
+      cycleDate: txnDate,
+      actualAmount: actualAmount,
+      expectedAmount: source.amount,
+      goalAllocations: totalAllocations,
+      budgetReservations: budgetReservations,
+      totalExpenses: 0,
+      status: 'processed'
+    });
+    await cycle.save();
+
+    const freshSource = await IncomeSource.findById(source._id);
+    if (!freshSource.lastReceivedDate || new Date(txnDate) > new Date(freshSource.lastReceivedDate)) {
+      freshSource.lastReceivedDate = txnDate;
+      await freshSource.save();
+    }
+}
 app.use('/api/cashflow', require('./routes/cashflow'));
 app.post("/api/subscriptions", async (req, res) => {
   const { userId, name, price, plan, logo, color, category, billingCycle, nextBillingDate, externalId, type } = req.body;
@@ -844,7 +884,11 @@ app.get("/api/gmail/scan", async (req, res) => {
                  });
                  
                  if (!existingCycle) {
-                   if (Math.abs(match.amount - numericPrice) > 100) {
+                    const isPastMonth = emailDate.getFullYear() < new Date().getFullYear() || (emailDate.getFullYear() === new Date().getFullYear() && emailDate.getMonth() < new Date().getMonth());
+                    
+                    if (isPastMonth) {
+                        await autoProcessPastCycle(userId, newTxn._id, match, emailDate, numericPrice, cycleId);
+                    } else if (Math.abs(match.amount - numericPrice) > 100) {
                      await Notification.findOneAndUpdate(
                        { userId, type: 'income_verification', transactionId: newTxn._id },
                        { 
@@ -898,8 +942,13 @@ app.get("/api/gmail/scan", async (req, res) => {
                        });
                        
                        if (!existingCycle) {
-                         await Notification.findOneAndUpdate(
-                           { userId, type: 'income_verification', transactionId: newTxn._id },
+                          const isPastMonth = emailDate.getFullYear() < new Date().getFullYear() || (emailDate.getFullYear() === new Date().getFullYear() && emailDate.getMonth() < new Date().getMonth());
+                          
+                          if (isPastMonth) {
+                              await autoProcessPastCycle(userId, newTxn._id, s, emailDate, numericPrice, cycleId);
+                          } else {
+                            await Notification.findOneAndUpdate(
+                              { userId, type: 'income_verification', transactionId: newTxn._id },
                            { 
                              title: `Potential Income Detected`,
                              message: `Received ₹${numericPrice} from ${vendorName}. It's time for your ${s.name} income. Is this it?`,
@@ -910,7 +959,8 @@ app.get("/api/gmail/scan", async (req, res) => {
                            },
                            { upsert: true }
                          );
-                         break; // Stop after finding the first probable time-based match
+                          }
+                          break; // Stop after finding the first probable time-based match
                        }
                      }
                    }
