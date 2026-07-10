@@ -687,7 +687,7 @@ app.get("/api/gmail/scan", async (req, res) => {
       ...existingSubs.map(s => s.externalId)
     ]);
     
-    const newMessages = messages.filter(m => !existingIds.has(m.id));
+    const newMessages = messages.filter(m => !existingIds.has(m.id)).reverse();
     console.log(`[Gmail Scan] Skipping ${existingIds.size} already processed emails. ${newMessages.length} new emails to parse.`);
 
     for (const msg of newMessages) {
