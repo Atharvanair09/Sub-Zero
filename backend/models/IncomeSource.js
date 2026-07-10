@@ -7,6 +7,7 @@ const incomeSourceSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   frequency: { type: String, enum: ['weekly', 'biweekly', 'monthly', 'yearly'], default: 'monthly' },
   nextExpectedDate: { type: Date },
+  lastReceivedDate: { type: Date },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
