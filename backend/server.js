@@ -675,12 +675,27 @@ app.get("/api/gmail/scan", async (req, res) => {
       }
 
       const snippet = details.data.snippet ? details.data.snippet.toLowerCase() : "";
-      const subject = details.data.payload.headers.find(h => h.name === 'Subject')?.value.toLowerCase() || "";
+      const subjectHeader = details.data.payload.headers.find(h => h.name === 'Subject');
+      const subject = subjectHeader ? subjectHeader.value.toLowerCase() : "";
       const fullBody = getEmailBody(details.data.payload).toLowerCase();
       const textToScan = subject + " " + snippet + " " + fullBody;
 
-      const { parseEmail, extractCreditSender } = require("./src/parser/index");
+      const { parseEmail, extractCreditSender, validateTransactionEmail } = require("./src/parser/index");
       const { categorizeTransaction } = require("./src/parser/categorizer");
+      
+      const validationResult = validateTransactionEmail(subject, snippet, fullBody);
+      if (!validationResult.isValidTransaction) {
+        const senderHeader = details.data.payload.headers.find(h => h.name === 'From');
+        const sender = senderHeader ? senderHeader.value : "Unknown";
+        console.log(`[Gmail Scan] Skipped Email:`);
+        console.log(`  - Message ID: ${msg.id}`);
+        console.log(`  - Subject: ${subjectHeader ? subjectHeader.value : "None"}`);
+        console.log(`  - Sender: ${sender}`);
+        console.log(`  - Reason: ${validationResult.reason}`);
+        console.log(`  - Classification: ${validationResult.classification}`);
+        continue;
+      }
+
       const parsed = parseEmail(textToScan);
       
       let vendorName = null;

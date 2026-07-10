@@ -108,47 +108,38 @@ class _AddIncomeSourcePageState extends State<AddIncomeSourcePage> {
   void _saveIncomeSource() async {
     FocusScope.of(context).unfocus();
 
-    final name = _nameController.text.trim();
-    final sender = _senderController.text.trim();
-    final amountText = _amountController.text.replaceAll(',', '');
-    final amount = double.tryParse(amountText);
-
-    if (name.isEmpty || sender.isEmpty || amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'PLEASE FILL ALL REQUIRED FIELDS CORRECTLY',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 14,
-            ),
-          ),
-          backgroundColor: const Color(0xFFE50000),
-          behavior: SnackBarBehavior.floating,
-          shape: const RoundedRectangleBorder(
-            side: BorderSide(color: Colors.black, width: 2),
-            borderRadius: BorderRadius.zero,
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-      return;
-    }
-
-    final newSource = IncomeSource(
-      id: widget.existingSource?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      name: name,
-      sender: sender,
-      expectedAmount: amount,
-      frequency: _frequency.toLowerCase(),
-      nextExpectedDate: _expectedDate,
-      lastReceivedDate: widget.existingSource?.lastReceivedDate,
-      linkedTransactionIds: widget.existingSource?.linkedTransactionIds ?? [],
-      isActive: widget.existingSource?.isActive ?? true,
-    );
-
     try {
+      final name = _nameController.text.trim();
+      final sender = _senderController.text.trim();
+      final amountText = _amountController.text.replaceAll(',', '');
+      final amount = double.tryParse(amountText);
+
+      if (name.isEmpty || sender.isEmpty || amount == null || amount <= 0) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Validation Error'),
+            content: Text('Please fill all required fields correctly.\nName: "$name"\nSender: "$sender"\nAmount: $amount'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))
+            ],
+          ),
+        );
+        return;
+      }
+
+      final newSource = IncomeSource(
+        id: widget.existingSource?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        name: name,
+        sender: sender,
+        expectedAmount: amount,
+        frequency: _frequency.toLowerCase(),
+        nextExpectedDate: _expectedDate,
+        lastReceivedDate: widget.existingSource?.lastReceivedDate,
+        linkedTransactionIds: widget.existingSource?.linkedTransactionIds ?? [],
+        isActive: widget.existingSource?.isActive ?? true,
+      );
+
       if (widget.existingSource != null) {
         await IncomeService.instance.updateIncomeSource(newSource);
       } else {
@@ -169,29 +160,19 @@ class _AddIncomeSourcePageState extends State<AddIncomeSourcePage> {
             ),
             backgroundColor: const Color(0xFF9AFF00),
             behavior: SnackBarBehavior.floating,
-            shape: const RoundedRectangleBorder(
-              side: BorderSide(color: Colors.black, width: 2),
-              borderRadius: BorderRadius.zero,
-            ),
-            margin: const EdgeInsets.all(16),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'ERROR SAVING: ${e.toString().replaceAll('Exception: ', '')}',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-              ),
-            ),
-            backgroundColor: const Color(0xFFE50000),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Backend Error'),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))
+            ],
           ),
         );
       }
