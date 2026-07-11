@@ -91,6 +91,7 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
       freshSource.lastReceivedDate = txnDate;
       await freshSource.save();
     }
+    console.log(`[Income Pipeline] Successfully auto-processed cycle ${cycleId} for source ${source.name}. Allocated: ₹${totalAllocations}`);
 }
 app.use('/api/cashflow', require('./routes/cashflow'));
 app.post("/api/subscriptions", async (req, res) => {
@@ -872,7 +873,12 @@ app.get("/api/gmail/scan", async (req, res) => {
                
                const match = sources.find(s => {
                  const expectedSender = (s.expectedSender || s.name).toLowerCase();
-                 return vendorName.toLowerCase().includes(expectedSender) || expectedSender.includes(vendorName.toLowerCase());
+                 // Strip generic keywords
+                 const cleanExpected = expectedSender.replace(/\b(upi|hdfc|bank)\b/gi, '').trim();
+                 const cleanVendor = vendorName.toLowerCase().replace(/\b(upi|hdfc|bank)\b/gi, '').trim();
+                 const isMatch = cleanVendor.includes(cleanExpected) || cleanExpected.includes(cleanVendor);
+                 console.log(`[Income Pipeline] Match check - Expected: '${cleanExpected}', Vendor: '${cleanVendor}', Matched: ${isMatch}`);
+                 return isMatch;
                });
                
                if (match) {
@@ -884,45 +890,49 @@ app.get("/api/gmail/scan", async (req, res) => {
                  });
                  
                  if (!existingCycle) {
-                    const isPastMonth = emailDate.getFullYear() < new Date().getFullYear() || (emailDate.getFullYear() === new Date().getFullYear() && emailDate.getMonth() < new Date().getMonth());
-                    
-                    if (isPastMonth) {
-                        await autoProcessPastCycle(userId, newTxn._id, match, emailDate, numericPrice, cycleId);
-                    } else if (Math.abs(match.amount - numericPrice) > 100) {
-                     await Notification.findOneAndUpdate(
-                       { userId, type: 'income_verification', transactionId: newTxn._id },
-                       { 
-                         title: `Unusual Income Amount`,
-                         message: `Received ₹${numericPrice} from ${vendorName}. Expected ₹${match.amount}. Is this your ${match.name} income?`,
-                         priority: 'high',
-                         transactionId: newTxn._id,
-                         incomeSourceId: match._id,
-                         metaData: { cycleIdentifier: cycleId, expectedAmount: match.amount, transactionAmount: numericPrice }
-                       },
-                       { upsert: true }
-                     );
-                   } else {
-                     await Notification.findOneAndUpdate(
-                       { userId, type: 'income_detected', transactionId: newTxn._id },
-                       { 
-                         title: `Income Detected: ₹${numericPrice}`,
-                         message: `Matches your "${match.name}" income source. Tap to confirm and allocate.`,
-                         priority: 'high',
-                         transactionId: newTxn._id,
-                         incomeSourceId: match._id,
-                         metaData: { cycleIdentifier: cycleId, expectedAmount: match.amount, transactionAmount: numericPrice }
-                       },
-                       { upsert: true }
-                     );
-                   }
+                     console.log(`[Income Pipeline] No existing cycle found for ${cycleId}, checking amount difference.`);
+                     
+                     if (Math.abs(match.amount - numericPrice) <= 100) {
+                         console.log(`[Income Pipeline] Amount matches expected (diff <= 100). Auto-processing cycle ${cycleId}.`);
+                         await autoProcessPastCycle(userId, newTxn._id, match, emailDate, numericPrice, cycleId);
+                     } else {
+                         console.log(`[Income Pipeline] Amount mismatch. Expected ₹${match.amount}, Got ₹${numericPrice}. Requesting verification.`);
+                         await Notification.findOneAndUpdate(
+                           { userId, type: 'income_verification', transactionId: newTxn._id },
+                           { 
+                             title: `Unusual Income Amount`,
+                             message: `Received ₹${numericPrice} from ${vendorName}. Expected ₹${match.amount}. Is this your ${match.name} income?`,
+                             priority: 'high',
+                             transactionId: newTxn._id,
+                             incomeSourceId: match._id,
+                             metaData: { cycleIdentifier: cycleId, expectedAmount: match.amount, transactionAmount: numericPrice }
+                           },
+                           { upsert: true }
+                         );
+                     }
+                 } else {
+                     console.log(`[Income Pipeline] Cycle ${cycleId} already processed. Treated as normal credit.`);
                  }
                  // If existingCycle exists, it's treated as normal credit.
                } else {
                  // Time-based heuristic fallback if sender didn't match
+                 console.log(`[Income Pipeline] No sender match. Falling back to time-based heuristic.`);
                  for (const s of sources) {
                    const lastCycle = await IncomeCycle.findOne({ incomeSourceId: s._id, status: 'processed' }).sort({ cycleDate: -1 });
+                   let referenceDate = null;
                    if (lastCycle) {
-                     const daysDiff = (emailDate.getTime() - new Date(lastCycle.cycleDate).getTime()) / (1000 * 3600 * 24);
+                     referenceDate = new Date(lastCycle.cycleDate);
+                   } else if (s.nextExpectedDate) {
+                     referenceDate = new Date(s.nextExpectedDate);
+                     if (s.frequency === 'monthly') referenceDate.setMonth(referenceDate.getMonth() - 1);
+                     else if (s.frequency === 'biweekly') referenceDate.setDate(referenceDate.getDate() - 14);
+                     else if (s.frequency === 'weekly') referenceDate.setDate(referenceDate.getDate() - 7);
+                   } else {
+                     referenceDate = new Date(s.createdAt);
+                   }
+                   
+                   if (referenceDate) {
+                     const daysDiff = (emailDate.getTime() - referenceDate.getTime()) / (1000 * 3600 * 24);
                      let isTimeMatch = false;
                      
                      if (s.frequency === 'monthly' && daysDiff >= 26 && daysDiff <= 35) {
@@ -934,6 +944,7 @@ app.get("/api/gmail/scan", async (req, res) => {
                      }
                      
                      if (isTimeMatch) {
+                       console.log(`[Income Pipeline] Time-based match found for source ${s.name} (daysDiff: ${daysDiff.toFixed(1)}). Requesting verification.`);
                        const cycleId = IncomeCycle.getCycleIdentifier(s.frequency, emailDate);
                        const existingCycle = await IncomeCycle.findOne({ 
                          incomeSourceId: s._id, 
@@ -942,11 +953,11 @@ app.get("/api/gmail/scan", async (req, res) => {
                        });
                        
                        if (!existingCycle) {
-                          const isPastMonth = emailDate.getFullYear() < new Date().getFullYear() || (emailDate.getFullYear() === new Date().getFullYear() && emailDate.getMonth() < new Date().getMonth());
-                          
-                          if (isPastMonth) {
+                          if (Math.abs(s.amount - numericPrice) <= 100) {
+                              console.log(`[Income Pipeline] Amount matches expected (diff <= 100) in fallback. Auto-processing cycle ${cycleId}.`);
                               await autoProcessPastCycle(userId, newTxn._id, s, emailDate, numericPrice, cycleId);
                           } else {
+                            console.log(`[Income Pipeline] Amount mismatch in fallback. Requesting verification.`);
                             await Notification.findOneAndUpdate(
                               { userId, type: 'income_verification', transactionId: newTxn._id },
                            { 

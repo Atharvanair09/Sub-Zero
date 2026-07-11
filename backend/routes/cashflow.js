@@ -165,6 +165,9 @@ router.get('/summary', async (req, res) => {
        let incomeForSource = src.amount;
        if (confirmedCycle) {
            incomeForSource = confirmedCycle.actualAmount;
+           console.log(`[Cashflow API] /summary - Found confirmed cycle ${cycleId} for source ${src.name}. Actual Amount: ₹${incomeForSource}`);
+       } else {
+           console.log(`[Cashflow API] /summary - No confirmed cycle ${cycleId} for source ${src.name}. Using expected Amount: ₹${incomeForSource}`);
        }
        totalIncome += incomeForSource;
        
@@ -231,6 +234,7 @@ router.post('/process-cycle', async (req, res) => {
 
     const IncomeCycle = require('../models/IncomeCycle');
     const cycleId = IncomeCycle.getCycleIdentifier(source.frequency, txn.date || new Date());
+    console.log(`[Cashflow API] /process-cycle - Triggered for source ${source.name}, transaction ${txn._id}. CycleId: ${cycleId}`);
 
     // Validation: Ensure this cycle wasn't already processed
     const existingCycle = await IncomeCycle.findOne({ 
@@ -291,6 +295,7 @@ router.post('/process-cycle', async (req, res) => {
     });
 
     await cycle.save();
+    console.log(`[Cashflow API] /process-cycle - Created and saved IncomeCycle ${cycleId} with actual amount ₹${actualAmount}`);
 
     // Update the IncomeSource's lastReceivedDate if the transaction is newer
     if (!source.lastReceivedDate || new Date(txn.date) > new Date(source.lastReceivedDate)) {

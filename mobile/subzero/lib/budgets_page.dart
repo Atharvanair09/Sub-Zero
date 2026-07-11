@@ -20,6 +20,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
   bool _isLoading = true;
   double _totalBudget = 0;
   double _totalSpent = 0;
+  double _totalIncome = 0;
 
   @override
   void initState() {
@@ -58,6 +59,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
           _utilizations = utils;
           _totalBudget = totalB;
           _totalSpent = totalS;
+          _totalIncome = (data['totalIncome'] ?? 0).toDouble();
           _isLoading = false;
         });
       } else {
@@ -171,7 +173,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('TOTAL SPENT / BUDGET', style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('TOTAL SPENT / MONTHLY INCOME', style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
@@ -179,12 +181,12 @@ class _BudgetsPageState extends State<BudgetsPage> {
                               Text('\$${_totalSpent.toStringAsFixed(0)}', style: GoogleFonts.inter(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900)),
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 6, left: 8),
-                                child: Text('/ \$${_totalBudget.toStringAsFixed(0)}', style: GoogleFonts.inter(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
+                                child: Text('/ \$${_totalIncome.toStringAsFixed(0)}', style: GoogleFonts.inter(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
-                          _buildProgressBar(_totalBudget > 0 ? (_totalSpent / _totalBudget) : 0),
+                          _buildProgressBar(_totalIncome > 0 ? (_totalSpent / _totalIncome) : 0),
                         ],
                       ),
                     ),
