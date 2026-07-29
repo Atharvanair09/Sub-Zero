@@ -57,7 +57,7 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
     const IncomeCycle = require('./models/IncomeCycle');
     const GoalAllocation = require('./models/GoalAllocation');
     const SavingsGoal = require('./models/SavingsGoal');
-    const CategoryBudget = require('./models/CategoryBudget');
+    const budgetRepository = require('./repositories/BudgetRepository');
     const incomeRepository = require('./repositories/IncomeRepository');
 
     const allocations = await GoalAllocation.find({ incomeSourceId: source._id, status: 'active' });
@@ -69,7 +69,7 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
       await SavingsGoal.findByIdAndUpdate(alloc.goalId, { $inc: { currentAmount: amountToAdd } });
     }
 
-    const budgets = await CategoryBudget.find({ userId });
+    const budgets = await budgetRepository.findMany({ userId });
     let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
 
     const cycle = new IncomeCycle({

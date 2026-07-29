@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const incomeRepository = require('../repositories/IncomeRepository');
 const SavingsGoal = require('../models/SavingsGoal');
 const GoalAllocation = require('../models/GoalAllocation');
-const CategoryBudget = require('../models/CategoryBudget');
+const budgetRepository = require('../repositories/BudgetRepository');
 const IncomeCycle = require('../models/IncomeCycle');
 const transactionRepository = require('../repositories/TransactionRepository');
 
@@ -121,7 +121,7 @@ router.post('/goal-allocations', async (req, res) => {
 // --- Category Budgets ---
 router.get('/budgets', async (req, res) => {
   try {
-    const budgets = await CategoryBudget.find({ userId: req.query.userId });
+    const budgets = await budgetRepository.findMany({ userId: req.query.userId });
     res.json(budgets);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -132,7 +132,7 @@ router.post('/budgets', async (req, res) => {
   try {
     // Upsert budget for category
     const { userId, category, monthlyLimit, thresholds } = req.body;
-    const budget = await CategoryBudget.findOneAndUpdate(
+    const budget = await budgetRepository.findOneAndUpdate(
       { userId, category },
       { monthlyLimit, thresholds: thresholds || [80, 100], updatedAt: new Date() },
       { new: true, upsert: true }
@@ -181,7 +181,7 @@ router.get('/summary', async (req, res) => {
        }
     }
 
-    const budgets = await CategoryBudget.find({ userId });
+    const budgets = await budgetRepository.findMany({ userId });
     let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
 
     // Get current month expenses
@@ -276,7 +276,7 @@ router.post('/process-cycle', async (req, res) => {
     }
 
     // Get budget reservations
-    const budgets = await CategoryBudget.find({ userId });
+    const budgets = await budgetRepository.findMany({ userId });
     let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
 
     const cycle = new IncomeCycle({
