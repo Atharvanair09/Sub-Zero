@@ -18,7 +18,8 @@ let userTokens = null; // Memory storage for hackathon
 app.use(cors());
 app.use(express.json());
 
-const userRepository = require('../repositories/UserRepository');
+const userRepository = require('./repositories/UserRepository');
+const transactionRepository = require('./repositories/TransactionRepository');
 const Subscription = require("./models/Subscription");
 const Notification = require("./models/Notification");
 const Transaction = require("./models/Transaction");
@@ -164,7 +165,7 @@ app.get("/api/subscriptions", async (req, res) => {
 app.get("/api/transactions", async (req, res) => {
   const { userId } = req.query;
   try {
-    const transactions = await Transaction.find(userId ? { userId } : {}).sort({ date: -1 });
+    const transactions = await transactionRepository.findMany(userId ? { userId } : {}, { sort: { date: -1 } });
     res.json(transactions);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -203,7 +204,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
     
     // Get recent transactions to accurately calculate monthly spend
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const txns = await Transaction.find({ userId, date: { $gte: thirtyDaysAgo } });
+    const txns = await transactionRepository.findMany({ userId, date: { $gte: thirtyDaysAgo } });
     
     const subSpend = subs.reduce((sum, s) => sum + (s.billingCycle === 'monthly' ? s.price : s.price / 12), 0);
     const txnSpend = txns.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -253,7 +254,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
     }));
 
     // Dynamic Recent Activity (Syncing notifications + transactions)
-    const recentTxns = await Transaction.find({ userId }).sort({ date: -1 }).limit(5);
+    const recentTxns = await transactionRepository.findMany({ userId }, { sort: { date: -1 }, limit: 5 });
     const recentNotifs = await Notification.find({ userId }).sort({ createdAt: -1 }).limit(3);
     
     const recentActivity = [
@@ -680,7 +681,7 @@ app.get("/api/gmail/scan", async (req, res) => {
 
     // Bulk check for existing transactions/subscriptions to avoid rescanning
     const messageIds = messages.map(m => m.id);
-    const existingTxns = await mongoose.model('Transaction').find({ userId, externalId: { $in: messageIds } }, 'externalId').lean();
+    const existingTxns = await transactionRepository.findMany({ userId, externalId: { $in: messageIds } }, { projection: 'externalId', lean: true });
     const existingSubs = await mongoose.model('Subscription').find({ userId, externalId: { $in: messageIds } }, 'externalId').lean();
     
     const existingIds = new Set([
@@ -789,7 +790,7 @@ app.get("/api/gmail/scan", async (req, res) => {
         const Transaction = mongoose.model('Transaction');
         
         const alreadyExistsInSub = await Subscription.findOne({ userId, externalId: msg.id });
-        const alreadyExistsInTxn = await Transaction.findOne({ userId, externalId: msg.id });
+        const alreadyExistsInTxn = await transactionRepository.findOne({ userId, externalId: msg.id });
 
         // Semantic deduplication: Check for same amount, name, type within a 2-hour window
         const emailDate = new Date(parseInt(details.data.internalDate));
@@ -798,7 +799,7 @@ app.get("/api/gmail/scan", async (req, res) => {
         const numericPrice = parseFloat(price.replace(',', ''));
 
         // More robust deduplication logic to catch bank alerts vs specific merchant receipts
-        const potentialDuplicates = await Transaction.find({
+        const potentialDuplicates = await transactionRepository.findMany({
             userId,
             amount: numericPrice,
             type: type,
@@ -1038,7 +1039,7 @@ app.get("/api/gmail/scan", async (req, res) => {
 app.get("/api/insights/patterns", async (req, res) => {
   const { userId } = req.query;
   try {
-    const txns = await Transaction.find(userId ? { userId } : {});
+    const txns = await transactionRepository.findMany(userId ? { userId } : {});
     
     let foodTxns = [];
     let shoppingTxns = [];
@@ -1111,7 +1112,7 @@ app.post("/api/chat", async (req, res) => {
         reply = `You are fully optimized right now! All your subscriptions show regular usage. But I can monitor for better deals.`;
       }
     } else if (msg.includes("cancel") || msg.includes("waste") || msg.includes("wasting") || msg.includes("where am i wasting")) {
-      const txns = await Transaction.find(userId ? { userId } : {});
+      const txns = await transactionRepository.findMany(userId ? { userId } : {});
       let foodSpend = txns.filter(t => ['Food', 'Zomato', 'Swiggy'].includes(t.category) || /zomato|swiggy|uber eats/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
 
       const worstSub = subs.sort((a,b) => b.price - a.price).find(s => !s.usedRecently);

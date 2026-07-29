@@ -8,6 +8,7 @@ const GoalAllocation = require('../models/GoalAllocation');
 const CategoryBudget = require('../models/CategoryBudget');
 const IncomeCycle = require('../models/IncomeCycle');
 const Transaction = require('../models/Transaction');
+const transactionRepository = require('../repositories/TransactionRepository');
 
 // --- Income Sources ---
 router.get('/income-sources', async (req, res) => {
@@ -187,7 +188,7 @@ router.get('/summary', async (req, res) => {
 
     // Get current month expenses
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const txns = await Transaction.find({ 
+    const txns = await transactionRepository.findMany({ 
       userId, 
       type: 'debit', 
       date: { $gte: startOfMonth } 
@@ -227,7 +228,7 @@ router.post('/process-cycle', async (req, res) => {
   const { userId, transactionId, incomeSourceId, choice } = req.body; // choice: 'use_transaction', 'use_expected', 'ignore', or undefined
   
   try {
-    const txn = await Transaction.findById(transactionId);
+    const txn = await transactionRepository.findById(transactionId);
     const source = await IncomeSource.findById(incomeSourceId);
 
     if (!txn || !source) return res.status(404).json({ error: "Transaction or Income Source not found" });

@@ -3,9 +3,10 @@ require('dotenv').config();
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   const Transaction = require('./models/Transaction');
+  const transactionRepository = require('./repositories/TransactionRepository');
   const Notification = require('./models/Notification');
   
-  const txns = await Transaction.find({ externalId: { $exists: true } });
+  const txns = await transactionRepository.findMany({ externalId: { $exists: true } });
   console.log('Total external txns:', txns.length);
   
   const uniqueTxns = new Map();
