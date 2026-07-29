@@ -8,7 +8,7 @@ async function run() {
   const transactionRepository = require('../repositories/TransactionRepository');
   const notificationRepository = require('./repositories/NotificationRepository');
   const IncomeCycle = require('./models/IncomeCycle');
-  const IncomeSource = require('./models/IncomeSource');
+  const incomeRepository = require('./repositories/IncomeRepository');
   const user = await userRepository.findOne({ email: 'atharvanair09.ns@gmail.com' });
   if (user) {
     const txns = await transactionRepository.deleteMany({ userId: user._id, externalId: { $exists: true } });
@@ -20,7 +20,7 @@ async function run() {
     const cycles = await mongoose.model('IncomeCycle').deleteMany({ userId: user._id });
     console.log('Deleted IncomeCycles:', cycles.deletedCount);
     
-    const sources = await mongoose.model('IncomeSource').updateMany({ userId: user._id }, { $set: { lastReceivedDate: null } });
+    const sources = await incomeRepository.updateMany({ userId: user._id }, { $set: { lastReceivedDate: null } });
     console.log('Reset IncomeSources:', sources.modifiedCount);
   }
   process.exit(0);

@@ -1,6 +1,6 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
-const IncomeSource = require("./models/IncomeSource");
+const incomeRepository = require("./repositories/IncomeRepository");
 
 async function test() {
   await mongoose.connect(process.env.MONGODB_URI);
@@ -14,8 +14,7 @@ async function test() {
       frequency: "monthly",
       status: "active"
     };
-    const src = new IncomeSource(data);
-    await src.save();
+    const src = await incomeRepository.create(data);
     console.log("Success! ID saved as:", src._id);
   } catch (e) {
     console.log("Error:", e.message);

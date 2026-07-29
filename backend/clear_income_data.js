@@ -1,13 +1,13 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
-const IncomeSource = require("./models/IncomeSource");
+const incomeRepository = require("./repositories/IncomeRepository");
 const IncomeCycle = require("./models/IncomeCycle");
 const GoalAllocation = require("./models/GoalAllocation");
 
 async function clearData() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    const sourceRes = await IncomeSource.deleteMany({});
+    const sourceRes = await incomeRepository.deleteMany({});
     const cycleRes = await IncomeCycle.deleteMany({});
     const allocRes = await GoalAllocation.deleteMany({});
     

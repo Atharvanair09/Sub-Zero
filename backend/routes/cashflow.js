@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 
-const IncomeSource = require('../models/IncomeSource');
+const incomeRepository = require('../repositories/IncomeRepository');
 const SavingsGoal = require('../models/SavingsGoal');
 const GoalAllocation = require('../models/GoalAllocation');
 const CategoryBudget = require('../models/CategoryBudget');
@@ -12,7 +12,7 @@ const transactionRepository = require('../repositories/TransactionRepository');
 // --- Income Sources ---
 router.get('/income-sources', async (req, res) => {
   try {
-    const sources = await IncomeSource.find({ userId: req.query.userId });
+    const sources = await incomeRepository.findMany({ userId: req.query.userId });
     res.json(sources);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -21,8 +21,7 @@ router.get('/income-sources', async (req, res) => {
 
 router.post('/income-sources', async (req, res) => {
   try {
-    const newSource = new IncomeSource(req.body);
-    await newSource.save();
+    const newSource = await incomeRepository.create(req.body);
     res.json({ success: true, incomeSource: newSource });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -31,7 +30,7 @@ router.post('/income-sources', async (req, res) => {
 
 router.delete('/income-sources/:id', async (req, res) => {
   try {
-    const result = await IncomeSource.findByIdAndDelete(req.params.id);
+    const result = await incomeRepository.findByIdAndDelete(req.params.id);
     if (!result) return res.status(404).json({ success: false, error: 'Income source not found' });
     res.json({ success: true, message: 'Income source deleted' });
   } catch (error) {
@@ -41,7 +40,7 @@ router.delete('/income-sources/:id', async (req, res) => {
 
 router.put('/income-sources/:id', async (req, res) => {
   try {
-    const result = await IncomeSource.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const result = await incomeRepository.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!result) return res.status(404).json({ success: false, error: 'Income source not found' });
     res.json({ success: true, incomeSource: result });
   } catch (error) {
@@ -82,7 +81,7 @@ router.get('/goal-allocations', async (req, res) => {
 router.post('/goal-allocations', async (req, res) => {
   const { userId, incomeSourceId, goalId, allocationType, amountOrPercentage } = req.body;
   try {
-    const incomeSource = await IncomeSource.findById(incomeSourceId);
+    const incomeSource = await incomeRepository.findById(incomeSourceId);
     if (!incomeSource) return res.status(404).json({ error: "Income source not found" });
 
     // Validate allocation limit
@@ -148,7 +147,7 @@ router.post('/budgets', async (req, res) => {
 router.get('/summary', async (req, res) => {
   const { userId } = req.query;
   try {
-    const incomeSources = await IncomeSource.find({ userId, status: 'active' });
+    const incomeSources = await incomeRepository.findMany({ userId, status: 'active' });
     const IncomeCycle = require('../models/IncomeCycle');
     
     let totalIncome = 0;
@@ -228,7 +227,7 @@ router.post('/process-cycle', async (req, res) => {
   
   try {
     const txn = await transactionRepository.findById(transactionId);
-    const source = await IncomeSource.findById(incomeSourceId);
+    const source = await incomeRepository.findById(incomeSourceId);
 
     if (!txn || !source) return res.status(404).json({ error: "Transaction or Income Source not found" });
 
@@ -299,8 +298,7 @@ router.post('/process-cycle', async (req, res) => {
 
     // Update the IncomeSource's lastReceivedDate if the transaction is newer
     if (!source.lastReceivedDate || new Date(txn.date) > new Date(source.lastReceivedDate)) {
-      source.lastReceivedDate = txn.date;
-      await source.save();
+      await incomeRepository.updateOne({ _id: source._id }, { $set: { lastReceivedDate: txn.date } });
     }
     
     const notificationRepository = require('../repositories/NotificationRepository');

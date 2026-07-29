@@ -58,7 +58,7 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
     const GoalAllocation = require('./models/GoalAllocation');
     const SavingsGoal = require('./models/SavingsGoal');
     const CategoryBudget = require('./models/CategoryBudget');
-    const IncomeSource = mongoose.model('IncomeSource');
+    const incomeRepository = require('./repositories/IncomeRepository');
 
     const allocations = await GoalAllocation.find({ incomeSourceId: source._id, status: 'active' });
     let totalAllocations = 0;
@@ -87,10 +87,9 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
     });
     await cycle.save();
 
-    const freshSource = await IncomeSource.findById(source._id);
+    const freshSource = await incomeRepository.findById(source._id);
     if (!freshSource.lastReceivedDate || new Date(txnDate) > new Date(freshSource.lastReceivedDate)) {
-      freshSource.lastReceivedDate = txnDate;
-      await freshSource.save();
+      await incomeRepository.updateOne({ _id: source._id }, { $set: { lastReceivedDate: txnDate } });
     }
     console.log(`[Income Pipeline] Successfully auto-processed cycle ${cycleId} for source ${source.name}. Allocated: ₹${totalAllocations}`);
 }
@@ -864,9 +863,9 @@ app.get("/api/gmail/scan", async (req, res) => {
 
              // Check if it matches an Income Source
              if (type === 'credit') {
-               const IncomeSource = mongoose.model('IncomeSource');
+               const incomeRepository = require('./repositories/IncomeRepository');
                const IncomeCycle = mongoose.model('IncomeCycle');
-               const sources = await IncomeSource.find({ userId, status: 'active' });
+               const sources = await incomeRepository.findMany({ userId, status: 'active' });
                
                const match = sources.find(s => {
                  const expectedSender = (s.expectedSender || s.name).toLowerCase();
