@@ -24,7 +24,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  double _balance = 23549.34;
+  double _balance = 16384.24;
   Set<String> _processedTransactionIds = {};
   Timer? _fetchTimer;
   bool _isFirstRun = false;
@@ -118,7 +118,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             if (id.isNotEmpty) _processedTransactionIds.add(id);
           }
           _isFirstRun = false;
-          await prefs.setStringList('processed_transaction_ids_v5', _processedTransactionIds.toList());
+          await prefs.setStringList('processed_transaction_ids_v8', _processedTransactionIds.toList());
         } else {
           await processNewTransactions(txns);
         }
@@ -131,8 +131,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _loadBalanceData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _balance = prefs.getDouble('current_balance_v5') ?? 23549.34;
-      List<String>? processedIds = prefs.getStringList('processed_transaction_ids_v5');
+      _balance = prefs.getDouble('current_balance_v8') ?? 16384.24;
+      List<String>? processedIds = prefs.getStringList('processed_transaction_ids_v8');
       if (processedIds != null) {
         _processedTransactionIds = processedIds.toSet();
       } else {
@@ -171,8 +171,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     if (balanceChanged) {
       setState(() {});
-      await prefs.setDouble('current_balance_v5', _balance);
-      await prefs.setStringList('processed_transaction_ids_v5', _processedTransactionIds.toList());
+      await prefs.setDouble('current_balance_v8', _balance);
+      await prefs.setStringList('processed_transaction_ids_v8', _processedTransactionIds.toList());
     }
   }
 

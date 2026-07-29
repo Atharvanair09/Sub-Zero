@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const transactionRepository = require("./repositories/TransactionRepository");
 async function clearOld() {
   await mongoose.connect(process.env.MONGODB_URI);
-  const userRepository = require('../repositories/UserRepository');
+  const userRepository = require('./repositories/UserRepository');
   const user = await userRepository.findOne({ email: "atharvanair09.ns@gmail.com" });
   
   if (user) {
