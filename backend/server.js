@@ -20,8 +20,8 @@ app.use(express.json());
 
 const userRepository = require('./repositories/UserRepository');
 const transactionRepository = require('./repositories/TransactionRepository');
+const notificationRepository = require('./repositories/NotificationRepository');
 const Subscription = require("./models/Subscription");
-const Notification = require("./models/Notification");
 
 // Plan Alternatives Database (Phase 2: Plan Optimization)
 const PLAN_ALTERNATIVES = {
@@ -253,7 +253,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
 
     // Dynamic Recent Activity (Syncing notifications + transactions)
     const recentTxns = await transactionRepository.findMany({ userId }, { sort: { date: -1 }, limit: 5 });
-    const recentNotifs = await Notification.find({ userId }).sort({ createdAt: -1 }).limit(3);
+    const recentNotifs = await notificationRepository.findMany({ userId }, { sort: { createdAt: -1 }, limit: 3 });
     
     const recentActivity = [
       ...recentTxns.map(t => ({
@@ -438,7 +438,7 @@ app.post("/api/users/sync", async (req, res) => {
       await Promise.all([
         Subscription.updateMany({ userId: staleUserId }, { $set: { userId: canonicalId } }),
         transactionRepository.updateMany(  { userId: staleUserId }, { $set: { userId: canonicalId } }),
-        Notification.updateMany( { userId: staleUserId }, { $set: { userId: canonicalId } }),
+        notificationRepository.updateMany( { userId: staleUserId }, { $set: { userId: canonicalId } }),
       ]);
       await userRepository.deleteById(staleUserId);
       console.log(`✅ [Sync] Merge complete. Stale user ${staleUserId} deleted.`);
@@ -510,7 +510,7 @@ app.get("/api/notifications", async (req, res) => {
       const daysUntilBilling = Math.ceil((new Date(sub.nextBillingDate) - new Date()) / (1000 * 60 * 60 * 24));
       
       if (daysUntilBilling <= 2 && daysUntilBilling > 0) {
-        await Notification.findOneAndUpdate(
+        await notificationRepository.findOneAndUpdate(
           { userId, type: 'renewal', subscriptionId: sub._id, read: false },
           { 
             title: `Renewal in ${daysUntilBilling} days`,
@@ -522,7 +522,7 @@ app.get("/api/notifications", async (req, res) => {
       }
 
       if (sub.usageLogs.length === 0 && (new Date() - new Date(sub.createdAt)) > 15 * 24 * 60 * 60 * 1000) {
-        await Notification.findOneAndUpdate(
+        await notificationRepository.findOneAndUpdate(
           { userId, type: 'usage_alert', subscriptionId: sub._id, read: false },
           { 
             title: `Unused for 15 days`,
@@ -537,7 +537,7 @@ app.get("/api/notifications", async (req, res) => {
       if (sub.priceHistory && sub.priceHistory.length > 1) {
         const lastPrice = sub.priceHistory[sub.priceHistory.length - 2].price;
         if (sub.price > lastPrice) {
-          await Notification.findOneAndUpdate(
+          await notificationRepository.findOneAndUpdate(
             { userId, type: 'price_increase', subscriptionId: sub._id, read: false },
             { 
               title: `Price Increase Detected`,
@@ -550,7 +550,7 @@ app.get("/api/notifications", async (req, res) => {
       }
     }
 
-    const notifications = await Notification.find({ userId }).sort({ createdAt: -1 });
+    const notifications = await notificationRepository.findMany({ userId }, { sort: { createdAt: -1 } });
     res.json(notifications);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -560,7 +560,7 @@ app.get("/api/notifications", async (req, res) => {
 app.post("/api/notifications/read", async (req, res) => {
   const { notificationId } = req.body;
   try {
-    await Notification.findByIdAndUpdate(notificationId, { read: true });
+    await notificationRepository.findByIdAndUpdate(notificationId, { read: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -865,7 +865,6 @@ app.get("/api/gmail/scan", async (req, res) => {
              if (type === 'credit') {
                const IncomeSource = mongoose.model('IncomeSource');
                const IncomeCycle = mongoose.model('IncomeCycle');
-               const Notification = mongoose.model('Notification');
                const sources = await IncomeSource.find({ userId, status: 'active' });
                
                const match = sources.find(s => {
@@ -894,7 +893,7 @@ app.get("/api/gmail/scan", async (req, res) => {
                          await autoProcessPastCycle(userId, newTxn._id, match, emailDate, numericPrice, cycleId);
                      } else {
                          console.log(`[Income Pipeline] Amount mismatch. Expected ₹${match.amount}, Got ₹${numericPrice}. Requesting verification.`);
-                         await Notification.findOneAndUpdate(
+                         await notificationRepository.findOneAndUpdate(
                            { userId, type: 'income_verification', transactionId: newTxn._id },
                            { 
                              title: `Unusual Income Amount`,
@@ -955,7 +954,7 @@ app.get("/api/gmail/scan", async (req, res) => {
                               await autoProcessPastCycle(userId, newTxn._id, s, emailDate, numericPrice, cycleId);
                           } else {
                             console.log(`[Income Pipeline] Amount mismatch in fallback. Requesting verification.`);
-                            await Notification.findOneAndUpdate(
+                            await notificationRepository.findOneAndUpdate(
                               { userId, type: 'income_verification', transactionId: newTxn._id },
                            { 
                              title: `Potential Income Detected`,

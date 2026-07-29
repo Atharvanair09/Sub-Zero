@@ -1,73 +1,79 @@
 const Notification = require('../models/Notification');
 
 class NotificationRepository {
-  /**
-   * Finds notifications belonging to a specific user.
-   * Expected to be called by NotificationService.
-   * 
-   * @param {string} userId - The user's ObjectId
-   * @returns {Promise<Array<Object>>} Array of Notification documents
-   */
-  async findByUser(userId) {
-    throw new Error("Not implemented");
+  async findById(id) {
+    return await Notification.findById(id);
   }
 
-  /**
-   * Creates a new notification.
-   * Expected to be called by NotificationService.
-   * 
-   * @param {Object} notificationData - Data for the new notification
-   * @returns {Promise<Object>} The created Notification document
-   */
-  async create(notificationData) {
-    throw new Error("Not implemented");
+  async findOne(filter, projection = null) {
+    return await Notification.findOne(filter, projection);
   }
 
-  /**
-   * Updates a single notification by its MongoDB ObjectId.
-   * Expected to be called by NotificationService.
-   * 
-   * @param {string} id - The MongoDB ObjectId
-   * @param {Object} updateData - Data to update
-   * @returns {Promise<Object|null>} The updated Notification document
-   */
-  async update(id, updateData) {
-    throw new Error("Not implemented");
+  async findMany(filter, options = {}) {
+    const query = Notification.find(filter);
+    if (options.projection) query.select(options.projection);
+    if (options.sort) query.sort(options.sort);
+    if (options.limit) query.limit(options.limit);
+    if (options.skip) query.skip(options.skip);
+    if (options.lean) query.lean();
+    return await query.exec();
   }
 
-  /**
-   * Finds one notification matching a query and updates it.
-   * Expected to be called by NotificationService.
-   * 
-   * @param {Object} query - The filter criteria
-   * @param {Object} updateData - Data to update
-   * @returns {Promise<Object|null>} The updated Notification document
-   */
-  async updateByQuery(query, updateData) {
-    throw new Error("Not implemented");
+  async create(data) {
+    const notification = new Notification(data);
+    return await notification.save();
   }
 
-  /**
-   * Updates multiple notifications matching a query.
-   * Expected to be called by NotificationService.
-   * 
-   * @param {Object} query - The filter criteria
-   * @param {Object} updateData - Data to update
-   * @returns {Promise<Object>} Mongoose UpdateResult object
-   */
-  async updateMany(query, updateData) {
-    throw new Error("Not implemented");
+  async createMany(data) {
+    return await Notification.insertMany(data);
   }
 
-  /**
-   * Deletes multiple notifications matching a query.
-   * Expected to be called by NotificationService.
-   * 
-   * @param {Object} query - The filter criteria
-   * @returns {Promise<Object>} Mongoose DeleteResult object
-   */
-  async deleteMany(query) {
-    throw new Error("Not implemented");
+  async updateOne(filter, update, options = {}) {
+    return await Notification.updateOne(filter, update, options);
+  }
+
+  async updateMany(filter, update, options = {}) {
+    return await Notification.updateMany(filter, update, options);
+  }
+
+  async deleteOne(filter) {
+    return await Notification.deleteOne(filter);
+  }
+
+  async deleteMany(filter) {
+    return await Notification.deleteMany(filter);
+  }
+
+  async findOneAndUpdate(filter, update, options = {}) {
+    return await Notification.findOneAndUpdate(filter, update, options);
+  }
+
+  async findByIdAndUpdate(id, update, options = {}) {
+    return await Notification.findByIdAndUpdate(id, update, options);
+  }
+
+  async findOneAndDelete(filter) {
+    return await Notification.findOneAndDelete(filter);
+  }
+
+  async findByIdAndDelete(id) {
+    return await Notification.findByIdAndDelete(id);
+  }
+
+  async aggregate(pipeline) {
+    return await Notification.aggregate(pipeline);
+  }
+
+  async count(filter) {
+    return await Notification.countDocuments(filter);
+  }
+
+  async exists(filter) {
+    return await Notification.exists(filter);
+  }
+
+  async distinct(field, filter = {}) {
+    return await Notification.distinct(field, filter);
   }
 }
 

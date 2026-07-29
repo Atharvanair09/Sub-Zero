@@ -3,7 +3,7 @@ require('dotenv').config();
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   const transactionRepository = require('./repositories/TransactionRepository');
-  const Notification = require('./models/Notification');
+  const notificationRepository = require('./repositories/NotificationRepository');
   
   const txns = await transactionRepository.findMany({ externalId: { $exists: true } });
   console.log('Total external txns:', txns.length);
@@ -26,7 +26,7 @@ async function run() {
   }
   
   // Also delete duplicate notifications for the same income_verification
-  const notifs = await Notification.find({ type: 'income_verification' });
+  const notifs = await notificationRepository.findMany({ type: 'income_verification' });
   const uniqueNotifs = new Map();
   const toDeleteNotifs = [];
   
@@ -41,7 +41,7 @@ async function run() {
   
   console.log('Duplicate notifs to delete:', toDeleteNotifs.length);
   if (toDeleteNotifs.length > 0) {
-    await Notification.deleteMany({ _id: { $in: toDeleteNotifs } });
+    await notificationRepository.deleteMany({ _id: { $in: toDeleteNotifs } });
     console.log('Deleted duplicate notifs.');
   }
 

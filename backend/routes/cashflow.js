@@ -249,8 +249,8 @@ router.post('/process-cycle', async (req, res) => {
 
     if (choice === 'ignore') {
        // Mark notification as read and treat as regular credit
-       const Notification = require('../models/Notification');
-       await Notification.updateMany(
+       const notificationRepository = require('../repositories/NotificationRepository');
+       await notificationRepository.updateMany(
           { transactionId: txn._id, type: { $in: ['income_verification', 'income_detected'] } },
           { $set: { read: true } }
        );
@@ -303,8 +303,8 @@ router.post('/process-cycle', async (req, res) => {
       await source.save();
     }
     
-    const Notification = require('../models/Notification');
-    await Notification.updateMany(
+    const notificationRepository = require('../repositories/NotificationRepository');
+    await notificationRepository.updateMany(
        { transactionId: txn._id, type: { $in: ['income_verification', 'income_detected'] } },
        { $set: { read: true } }
     );
