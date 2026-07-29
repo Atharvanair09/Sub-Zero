@@ -19,6 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 const userRepository = require('./repositories/UserRepository');
+const gmailSyncRepository = require('./repositories/GmailSyncRepository');
 const transactionRepository = require('./repositories/TransactionRepository');
 const notificationRepository = require('./repositories/NotificationRepository');
 const Subscription = require("./models/Subscription");
@@ -486,7 +487,7 @@ app.get("/api/users/gmail-status", async (req, res) => {
     return res.status(400).json({ success: false, error: "userId is required" });
   }
   try {
-    const user = await userRepository.findById(userId, "gmailConnected googleTokens");
+    const user = await gmailSyncRepository.findById(userId, "gmailConnected googleTokens");
     if (!user) {
       return res.status(404).json({ success: false, error: "User not found" });
     }
@@ -610,7 +611,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
     }
 
     if (state) {
-      await userRepository.updateById(state, {
+      await gmailSyncRepository.updateById(state, {
         googleTokens: tokens,
         gmailConnected: true, // Mark Gmail as connected once we have valid tokens
       });
@@ -652,7 +653,7 @@ app.get("/api/gmail/scan", async (req, res) => {
       console.log("[Gmail Scan] Credentials set on oauth2Client from query accessToken successfully.");
       
       if (!user.gmailConnected) {
-        await userRepository.updateById(userId, { gmailConnected: true });
+        await gmailSyncRepository.updateById(userId, { gmailConnected: true });
       }
     } else {
       console.log(`[Gmail Scan] Retrieved tokens for user ${userId} from DB:`, {
@@ -1019,7 +1020,7 @@ app.get("/api/gmail/scan", async (req, res) => {
       if (userId) {
          try {
            // Clear both the tokens and the connected flag so the UI re-prompts OAuth
-           await userRepository.updateById(userId, { googleTokens: null, gmailConnected: false });
+           await gmailSyncRepository.updateById(userId, { googleTokens: null, gmailConnected: false });
            console.log(`[Gmail Scan] Successfully cleared googleTokens and gmailConnected for user ${userId}.`);
          } catch (dbErr) {
            console.error(`[Gmail Scan] Failed to clear googleTokens for user ${userId}:`, dbErr);

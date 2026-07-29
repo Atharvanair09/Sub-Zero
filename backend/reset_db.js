@@ -1,10 +1,10 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
 const userRepository = require('../repositories/UserRepository');
-
+const gmailSyncRepository = require('../repositories/GmailSyncRepository');
 async function fixDb() {
   await mongoose.connect(process.env.MONGODB_URI);
-  const user = await userRepository.updateOne(
+  const user = await gmailSyncRepository.updateOne(
     { email: "atharvanair09.ns@gmail.com" },
     { gmailConnected: false, googleTokens: null }
   );
