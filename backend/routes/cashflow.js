@@ -7,7 +7,6 @@ const SavingsGoal = require('../models/SavingsGoal');
 const GoalAllocation = require('../models/GoalAllocation');
 const CategoryBudget = require('../models/CategoryBudget');
 const IncomeCycle = require('../models/IncomeCycle');
-const Transaction = require('../models/Transaction');
 const transactionRepository = require('../repositories/TransactionRepository');
 
 // --- Income Sources ---

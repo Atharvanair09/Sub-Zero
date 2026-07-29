@@ -5,13 +5,13 @@ async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected.');
   const userRepository = require('../repositories/UserRepository');
-  const Transaction = require('./models/Transaction');
+  const transactionRepository = require('../repositories/TransactionRepository');
   const Notification = require('./models/Notification');
   const IncomeCycle = require('./models/IncomeCycle');
   const IncomeSource = require('./models/IncomeSource');
   const user = await userRepository.findOne({ email: 'atharvanair09.ns@gmail.com' });
   if (user) {
-    const txns = await mongoose.model('Transaction').deleteMany({ userId: user._id, externalId: { $exists: true } });
+    const txns = await transactionRepository.deleteMany({ userId: user._id, externalId: { $exists: true } });
     console.log('Deleted Txns:', txns.deletedCount);
     
     const notifs = await mongoose.model('Notification').deleteMany({ userId: user._id });

@@ -38,6 +38,52 @@ class TransactionRepository {
   async distinct(field, filter = {}) {
     return await Transaction.distinct(field, filter);
   }
+
+  async create(data) {
+    return await Transaction.create(data);
+  }
+
+  async createMany(data) {
+    return await Transaction.insertMany(data);
+  }
+
+  async updateOne(filter, update, options = {}) {
+    return await Transaction.updateOne(filter, update, options);
+  }
+
+  async updateMany(filter, update, options = {}) {
+    return await Transaction.updateMany(filter, update, options);
+  }
+
+  async deleteOne(filter) {
+    return await Transaction.deleteOne(filter);
+  }
+
+  async deleteMany(filter) {
+    return await Transaction.deleteMany(filter);
+  }
+
+  async findOneAndUpdate(filter, update, options = {}) {
+    return await Transaction.findOneAndUpdate(filter, update, options);
+  }
+
+  async findByIdAndUpdate(id, update, options = {}) {
+    return await Transaction.findByIdAndUpdate(id, update, options);
+  }
+
+  async findOneAndDelete(filter) {
+    return await Transaction.findOneAndDelete(filter);
+  }
+
+  async findByIdAndDelete(id) {
+    return await Transaction.findByIdAndDelete(id);
+  }
+
+  async bulkWrite(operations) {
+    return await Transaction.bulkWrite(operations);
+  }
+
+
 }
 
 module.exports = new TransactionRepository();

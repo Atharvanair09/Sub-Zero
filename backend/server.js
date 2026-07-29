@@ -22,7 +22,6 @@ const userRepository = require('./repositories/UserRepository');
 const transactionRepository = require('./repositories/TransactionRepository');
 const Subscription = require("./models/Subscription");
 const Notification = require("./models/Notification");
-const Transaction = require("./models/Transaction");
 
 // Plan Alternatives Database (Phase 2: Plan Optimization)
 const PLAN_ALTERNATIVES = {
@@ -104,7 +103,7 @@ app.post("/api/subscriptions", async (req, res) => {
     const parsedPrice = parseFloat(price);
 
     if (isTransaction) {
-       const newTxn = new Transaction({
+       const newTxn = await transactionRepository.create({
          userId,
          name,
          amount: parsedPrice,
@@ -113,7 +112,6 @@ app.post("/api/subscriptions", async (req, res) => {
          externalId,
          type: type || 'debit'
        });
-       await newTxn.save();
        return res.json({ success: true, transaction: newTxn });
     }
 
@@ -439,7 +437,7 @@ app.post("/api/users/sync", async (req, res) => {
       console.log(`⚠️ [Sync] Merging stale user ${staleUserId} → ${canonicalId}`);
       await Promise.all([
         Subscription.updateMany({ userId: staleUserId }, { $set: { userId: canonicalId } }),
-        Transaction.updateMany(  { userId: staleUserId }, { $set: { userId: canonicalId } }),
+        transactionRepository.updateMany(  { userId: staleUserId }, { $set: { userId: canonicalId } }),
         Notification.updateMany( { userId: staleUserId }, { $set: { userId: canonicalId } }),
       ]);
       await userRepository.deleteById(staleUserId);
@@ -787,7 +785,6 @@ app.get("/api/gmail/scan", async (req, res) => {
 
         // Filter out if already added as a subscription or transaction
         const Subscription = mongoose.model('Subscription');
-        const Transaction = mongoose.model('Transaction');
         
         const alreadyExistsInSub = await Subscription.findOne({ userId, externalId: msg.id });
         const alreadyExistsInTxn = await transactionRepository.findOne({ userId, externalId: msg.id });
@@ -823,7 +820,7 @@ app.get("/api/gmail/scan", async (req, res) => {
                     pt.name = vendorName;
                     pt.category = category;
                     if (autoSave === 'true') {
-                        await pt.save();
+                        await transactionRepository.updateOne({ _id: pt._id }, { $set: { name: vendorName, category: category } });
                     }
                 }
                 break;
@@ -853,7 +850,7 @@ app.get("/api/gmail/scan", async (req, res) => {
 
         if (!alreadyExistsInSub && !alreadyExistsInTxn && !duplicateTxn && !alreadyInDetected) {
            if (autoSave === 'true') {
-             const newTxn = new Transaction({
+             const newTxn = await transactionRepository.create({
                userId,
                name: vendorName,
                amount: numericPrice,
@@ -863,7 +860,6 @@ app.get("/api/gmail/scan", async (req, res) => {
                type: type,
                date: emailDate
              });
-             await newTxn.save();
 
              // Check if it matches an Income Source
              if (type === 'credit') {

@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
-  const Transaction = require('./models/Transaction');
   const transactionRepository = require('./repositories/TransactionRepository');
   const Notification = require('./models/Notification');
   
@@ -22,7 +21,7 @@ async function run() {
   
   console.log('Duplicates to delete:', toDelete.length);
   if (toDelete.length > 0) {
-    await Transaction.deleteMany({ _id: { $in: toDelete } });
+    await transactionRepository.deleteMany({ _id: { $in: toDelete } });
     console.log('Deleted duplicate txns.');
   }
   
