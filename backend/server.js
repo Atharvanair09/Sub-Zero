@@ -18,7 +18,7 @@ let userTokens = null; // Memory storage for hackathon
 app.use(cors());
 app.use(express.json());
 
-const User = require("./models/User");
+const userRepository = require('../repositories/UserRepository');
 const Subscription = require("./models/Subscription");
 const Notification = require("./models/Notification");
 const Transaction = require("./models/Transaction");
@@ -199,7 +199,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
   const { userId } = req.query;
   try {
     const subs = await Subscription.find({ userId });
-    const user = await User.findById(userId);
+    const user = await userRepository.findById(userId);
     
     // Get recent transactions to accurately calculate monthly spend
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -382,7 +382,7 @@ app.post("/api/users/sync", async (req, res) => {
 
   try {
     // --- Step 1: Find by email (canonical identity) ---
-    let user = await User.findOne({ email });
+    let user = await userRepository.findOne({ email });
 
     if (user) {
       // --- Step 2: User exists — link new provider IDs if not already linked ---
@@ -399,12 +399,12 @@ app.post("/api/users/sync", async (req, res) => {
         updates["providerIds.google"] = googleId;
       }
 
-      user = await User.findByIdAndUpdate(user._id, { $set: updates }, { new: true });
+      user = await userRepository.updateById(user._id, { $set: updates }, { new: true });
       console.log(`✅ [Sync] Existing user found & updated: ${user.email} (_id: ${user._id})`);
 
     } else {
       // --- Step 3: No user with this email — create one ---
-      user = await User.create({
+      user = await userRepository.create({
         email,
         fullName: fullName || "",
         imageUrl: imageUrl || "",
@@ -425,11 +425,11 @@ app.post("/api/users/sync", async (req, res) => {
     // (can happen from old data before this migration)
     let staleUserId = null;
     if (clerkId) {
-      const stale = await User.findOne({ clerkId, _id: { $ne: user._id } });
+      const stale = await userRepository.findOne({ clerkId, _id: { $ne: user._id } });
       if (stale) staleUserId = stale._id.toString();
     }
     if (!staleUserId && googleId) {
-      const stale = await User.findOne({ "providerIds.google": googleId, _id: { $ne: user._id } });
+      const stale = await userRepository.findOne({ "providerIds.google": googleId, _id: { $ne: user._id } });
       if (stale) staleUserId = stale._id.toString();
     }
 
@@ -441,7 +441,7 @@ app.post("/api/users/sync", async (req, res) => {
         Transaction.updateMany(  { userId: staleUserId }, { $set: { userId: canonicalId } }),
         Notification.updateMany( { userId: staleUserId }, { $set: { userId: canonicalId } }),
       ]);
-      await User.findByIdAndDelete(staleUserId);
+      await userRepository.deleteById(staleUserId);
       console.log(`✅ [Sync] Merge complete. Stale user ${staleUserId} deleted.`);
     }
 
@@ -468,7 +468,7 @@ app.patch("/api/users/preferences", async (req, res) => {
   const { userId, preferences } = req.body;
   try {
     // userId is now always the canonical MongoDB _id
-    const user = await User.findByIdAndUpdate(
+    const user = await userRepository.updateById(
       userId,
       { $set: { preferences } },
       { new: true }
@@ -487,7 +487,7 @@ app.get("/api/users/gmail-status", async (req, res) => {
     return res.status(400).json({ success: false, error: "userId is required" });
   }
   try {
-    const user = await User.findById(userId).select("gmailConnected googleTokens");
+    const user = await userRepository.findById(userId, "gmailConnected googleTokens");
     if (!user) {
       return res.status(404).json({ success: false, error: "User not found" });
     }
@@ -611,7 +611,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
     }
 
     if (state) {
-      await User.findByIdAndUpdate(state, {
+      await userRepository.updateById(state, {
         googleTokens: tokens,
         gmailConnected: true, // Mark Gmail as connected once we have valid tokens
       });
@@ -633,7 +633,7 @@ app.get("/api/gmail/scan", async (req, res) => {
   const maxResults = limit ? parseInt(limit, 10) : 50;
   console.log(`[Gmail Scan] Initiated scan for userId: ${userId}, autoSave: ${autoSave}, limit: ${maxResults}`);
   try {
-    const user = await User.findById(userId);
+    const user = await userRepository.findById(userId);
 
     if (!user) {
       console.error(`[Gmail Scan] Scan failed: User with ID ${userId} not found in database.`);
@@ -653,7 +653,7 @@ app.get("/api/gmail/scan", async (req, res) => {
       console.log("[Gmail Scan] Credentials set on oauth2Client from query accessToken successfully.");
       
       if (!user.gmailConnected) {
-        await User.findByIdAndUpdate(userId, { gmailConnected: true });
+        await userRepository.updateById(userId, { gmailConnected: true });
       }
     } else {
       console.log(`[Gmail Scan] Retrieved tokens for user ${userId} from DB:`, {
@@ -1023,7 +1023,7 @@ app.get("/api/gmail/scan", async (req, res) => {
       if (userId) {
          try {
            // Clear both the tokens and the connected flag so the UI re-prompts OAuth
-           await User.findByIdAndUpdate(userId, { googleTokens: null, gmailConnected: false });
+           await userRepository.updateById(userId, { googleTokens: null, gmailConnected: false });
            console.log(`[Gmail Scan] Successfully cleared googleTokens and gmailConnected for user ${userId}.`);
          } catch (dbErr) {
            console.error(`[Gmail Scan] Failed to clear googleTokens for user ${userId}:`, dbErr);

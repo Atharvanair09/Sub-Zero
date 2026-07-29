@@ -1,10 +1,10 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
-const User = require("./models/User");
+const userRepository = require('../repositories/UserRepository');
 
 async function checkDb() {
   await mongoose.connect(process.env.MONGODB_URI);
-  const users = await User.find({});
+  const users = await userRepository.findMany({});
   for (const user of users) {
     console.log(`User Email: ${user.email}`);
     console.log(`  gmailConnected: ${user.gmailConnected}`);

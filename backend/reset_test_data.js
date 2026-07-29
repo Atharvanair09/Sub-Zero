@@ -4,12 +4,12 @@ require('dotenv').config();
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected.');
-  const User = require('./models/User');
+  const userRepository = require('../repositories/UserRepository');
   const Transaction = require('./models/Transaction');
   const Notification = require('./models/Notification');
   const IncomeCycle = require('./models/IncomeCycle');
   const IncomeSource = require('./models/IncomeSource');
-  const user = await User.findOne({ email: 'atharvanair09.ns@gmail.com' });
+  const user = await userRepository.findOne({ email: 'atharvanair09.ns@gmail.com' });
   if (user) {
     const txns = await mongoose.model('Transaction').deleteMany({ userId: user._id, externalId: { $exists: true } });
     console.log('Deleted Txns:', txns.deletedCount);

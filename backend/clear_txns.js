@@ -4,8 +4,8 @@ const Transaction = require("./models/Transaction");
 
 async function clearOld() {
   await mongoose.connect(process.env.MONGODB_URI);
-  const User = require("./models/User");
-  const user = await User.findOne({ email: "atharvanair09.ns@gmail.com" });
+  const userRepository = require('../repositories/UserRepository');
+  const user = await userRepository.findOne({ email: "atharvanair09.ns@gmail.com" });
   
   if (user) {
     const result = await Transaction.deleteMany({ 
