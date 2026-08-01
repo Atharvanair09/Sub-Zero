@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 
 const incomeRepository = require('../repositories/IncomeRepository');
-const SavingsGoal = require('../models/SavingsGoal');
+const goalRepository = require('../repositories/GoalRepository');
 const GoalAllocation = require('../models/GoalAllocation');
 const budgetRepository = require('../repositories/BudgetRepository');
 const IncomeCycle = require('../models/IncomeCycle');
@@ -51,7 +51,7 @@ router.put('/income-sources/:id', async (req, res) => {
 // --- Savings Goals ---
 router.get('/savings-goals', async (req, res) => {
   try {
-    const goals = await SavingsGoal.find({ userId: req.query.userId });
+    const goals = await goalRepository.findMany({ userId: req.query.userId });
     res.json(goals);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -60,8 +60,7 @@ router.get('/savings-goals', async (req, res) => {
 
 router.post('/savings-goals', async (req, res) => {
   try {
-    const goal = new SavingsGoal(req.body);
-    await goal.save();
+    const goal = await goalRepository.create(req.body);
     res.json({ success: true, goal });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -270,7 +269,7 @@ router.post('/process-cycle', async (req, res) => {
       totalAllocations += amountToAdd;
       
       // Update actual goal balance
-      await SavingsGoal.findByIdAndUpdate(alloc.goalId, {
+      await goalRepository.findByIdAndUpdate(alloc.goalId, {
         $inc: { currentAmount: amountToAdd }
       });
     }

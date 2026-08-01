@@ -56,7 +56,7 @@ mongoose.connect(MONGODB_URI)
 async function autoProcessPastCycle(userId, transactionId, source, txnDate, actualAmount, cycleId) {
     const IncomeCycle = require('./models/IncomeCycle');
     const GoalAllocation = require('./models/GoalAllocation');
-    const SavingsGoal = require('./models/SavingsGoal');
+    const goalRepository = require('./repositories/GoalRepository');
     const budgetRepository = require('./repositories/BudgetRepository');
     const incomeRepository = require('./repositories/IncomeRepository');
 
@@ -66,7 +66,7 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
     for (let alloc of allocations) {
       const amountToAdd = alloc.allocationType === 'fixed' ? alloc.amountOrPercentage : (actualAmount * alloc.amountOrPercentage) / 100;
       totalAllocations += amountToAdd;
-      await SavingsGoal.findByIdAndUpdate(alloc.goalId, { $inc: { currentAmount: amountToAdd } });
+      await goalRepository.findByIdAndUpdate(alloc.goalId, { $inc: { currentAmount: amountToAdd } });
     }
 
     const budgets = await budgetRepository.findMany({ userId });

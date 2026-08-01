@@ -1,72 +1,82 @@
 const SavingsGoal = require('../models/SavingsGoal');
-const GoalAllocation = require('../models/GoalAllocation');
 
 class GoalRepository {
-  /**
-   * Finds all savings goals for a user.
-   * Expected to be called by GoalService.
-   * 
-   * @param {string} userId - The user's ObjectId
-   * @returns {Promise<Array<Object>>} Array of SavingsGoal documents
-   */
-  async findGoalsByUser(userId) {
-    throw new Error("Not implemented");
+  async findById(id) {
+    return await SavingsGoal.findById(id);
   }
 
-  /**
-   * Updates an existing savings goal by its ID.
-   * Expected to be called by GoalService or CashflowEngine.
-   * 
-   * @param {string} id - The MongoDB ObjectId of the SavingsGoal
-   * @param {Object} updateData - Data to update
-   * @returns {Promise<Object|null>} The updated SavingsGoal document
-   */
-  async updateGoal(id, updateData) {
-    throw new Error("Not implemented");
+  async findOne(filter, projection = {}) {
+    return await SavingsGoal.findOne(filter, projection);
   }
 
-  /**
-   * Creates a new savings goal.
-   * Expected to be called by GoalService.
-   * 
-   * @param {Object} goalData - Data for the new SavingsGoal
-   * @returns {Promise<Object>} The created SavingsGoal document
-   */
-  async createGoal(goalData) {
-    throw new Error("Not implemented");
+  async findMany(filter, options = {}) {
+    let query = SavingsGoal.find(filter);
+    
+    if (options.sort) query = query.sort(options.sort);
+    if (options.limit) query = query.limit(options.limit);
+    if (options.skip) query = query.skip(options.skip);
+    if (options.populate) query = query.populate(options.populate);
+    if (options.projection) query = query.select(options.projection);
+    if (options.lean) query = query.lean();
+    
+    return await query.exec();
   }
 
-  /**
-   * Finds goal allocations matching a query.
-   * Expected to be called by GoalService or CashflowEngine.
-   * 
-   * @param {Object} query - The filter criteria
-   * @returns {Promise<Array<Object>>} Array of GoalAllocation documents
-   */
-  async findAllocations(query) {
-    throw new Error("Not implemented");
+  async create(data) {
+    const goal = new SavingsGoal(data);
+    return await goal.save();
   }
 
-  /**
-   * Creates a new goal allocation.
-   * Expected to be called by CashflowEngine.
-   * 
-   * @param {Object} allocationData - Data for the new GoalAllocation
-   * @returns {Promise<Object>} The created GoalAllocation document
-   */
-  async createAllocation(allocationData) {
-    throw new Error("Not implemented");
+  async createMany(data) {
+    return await SavingsGoal.insertMany(data);
   }
 
-  /**
-   * Deletes multiple goal allocations matching a query.
-   * Expected to be called by GoalService.
-   * 
-   * @param {Object} query - The filter criteria
-   * @returns {Promise<Object>} Mongoose DeleteResult object
-   */
-  async deleteAllocations(query) {
-    throw new Error("Not implemented");
+  async updateOne(filter, update, options = {}) {
+    return await SavingsGoal.updateOne(filter, update, options);
+  }
+
+  async updateMany(filter, update, options = {}) {
+    return await SavingsGoal.updateMany(filter, update, options);
+  }
+
+  async deleteOne(filter) {
+    return await SavingsGoal.deleteOne(filter);
+  }
+
+  async deleteMany(filter) {
+    return await SavingsGoal.deleteMany(filter);
+  }
+
+  async findOneAndUpdate(filter, update, options = {}) {
+    return await SavingsGoal.findOneAndUpdate(filter, update, options);
+  }
+
+  async findByIdAndUpdate(id, update, options = {}) {
+    return await SavingsGoal.findByIdAndUpdate(id, update, options);
+  }
+
+  async findOneAndDelete(filter) {
+    return await SavingsGoal.findOneAndDelete(filter);
+  }
+
+  async findByIdAndDelete(id) {
+    return await SavingsGoal.findByIdAndDelete(id);
+  }
+
+  async aggregate(pipeline) {
+    return await SavingsGoal.aggregate(pipeline);
+  }
+
+  async count(filter) {
+    return await SavingsGoal.countDocuments(filter);
+  }
+
+  async exists(filter) {
+    return await SavingsGoal.exists(filter);
+  }
+
+  async distinct(field, filter = {}) {
+    return await SavingsGoal.distinct(field, filter);
   }
 }
 
