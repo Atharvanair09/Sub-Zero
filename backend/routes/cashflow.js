@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 
 const incomeRepository = require('../repositories/IncomeRepository');
 const goalRepository = require('../repositories/GoalRepository');
-const GoalAllocation = require('../models/GoalAllocation');
+const goalAllocationRepository = require('../repositories/GoalAllocationRepository');
 const budgetRepository = require('../repositories/BudgetRepository');
 const { getCycleIdentifier } = require('../utils/incomeCycleUtils');
 const incomeCycleRepository = require('../repositories/IncomeCycleRepository');
@@ -71,7 +71,7 @@ router.post('/savings-goals', async (req, res) => {
 // --- Goal Allocations ---
 router.get('/goal-allocations', async (req, res) => {
   try {
-    const allocations = await GoalAllocation.find({ userId: req.query.userId }).populate('goalId');
+    const allocations = await goalAllocationRepository.findMany({ userId: req.query.userId }, { populate: 'goalId' });
     res.json(allocations);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -85,7 +85,7 @@ router.post('/goal-allocations', async (req, res) => {
     if (!incomeSource) return res.status(404).json({ error: "Income source not found" });
 
     // Validate allocation limit
-    const existingAllocations = await GoalAllocation.find({ incomeSourceId, status: 'active' });
+    const existingAllocations = await goalAllocationRepository.findMany({ incomeSourceId, status: 'active' });
     
     let totalAllocatedAmount = 0;
     for (let alloc of existingAllocations) {
@@ -110,8 +110,7 @@ router.post('/goal-allocations', async (req, res) => {
       });
     }
 
-    const allocation = new GoalAllocation(req.body);
-    await allocation.save();
+    const allocation = await goalAllocationRepository.create(req.body);
     res.json({ success: true, allocation });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -171,7 +170,7 @@ router.get('/summary', async (req, res) => {
        totalIncome += incomeForSource;
        
        // Allocations
-       const allocations = await GoalAllocation.find({ incomeSourceId: src._id, status: 'active' });
+       const allocations = await goalAllocationRepository.findMany({ incomeSourceId: src._id, status: 'active' });
        for (let alloc of allocations) {
            if (alloc.allocationType === 'fixed') {
                totalAllocations += alloc.amountOrPercentage;
@@ -262,7 +261,7 @@ router.post('/process-cycle', async (req, res) => {
     }
 
     // Calculate total allocations
-    const allocations = await GoalAllocation.find({ incomeSourceId, status: 'active' });
+    const allocations = await goalAllocationRepository.findMany({ incomeSourceId, status: 'active' });
     let totalAllocations = 0;
     
     for (let alloc of allocations) {

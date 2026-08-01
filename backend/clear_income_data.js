@@ -2,14 +2,14 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const incomeRepository = require("./repositories/IncomeRepository");
 const incomeCycleRepository = require("./repositories/IncomeCycleRepository");
-const GoalAllocation = require("./models/GoalAllocation");
+const goalAllocationRepository = require("./repositories/GoalAllocationRepository");
 
 async function clearData() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     const sourceRes = await incomeRepository.deleteMany({});
     const cycleRes = await incomeCycleRepository.deleteMany({});
-    const allocRes = await GoalAllocation.deleteMany({});
+    const allocRes = await goalAllocationRepository.deleteMany({});
     
     console.log(`Deleted ${sourceRes.deletedCount} Income Sources.`);
     console.log(`Deleted ${cycleRes.deletedCount} Income Cycles.`);

@@ -55,12 +55,12 @@ mongoose.connect(MONGODB_URI)
 // Routes
 async function autoProcessPastCycle(userId, transactionId, source, txnDate, actualAmount, cycleId) {
     const incomeCycleRepository = require('./repositories/IncomeCycleRepository');
-    const GoalAllocation = require('./models/GoalAllocation');
+    const goalAllocationRepository = require('./repositories/GoalAllocationRepository');
     const goalRepository = require('./repositories/GoalRepository');
     const budgetRepository = require('./repositories/BudgetRepository');
     const incomeRepository = require('./repositories/IncomeRepository');
 
-    const allocations = await GoalAllocation.find({ incomeSourceId: source._id, status: 'active' });
+    const allocations = await goalAllocationRepository.findMany({ incomeSourceId: source._id, status: 'active' });
     let totalAllocations = 0;
     
     for (let alloc of allocations) {
