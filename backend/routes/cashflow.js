@@ -6,7 +6,8 @@ const incomeRepository = require('../repositories/IncomeRepository');
 const goalRepository = require('../repositories/GoalRepository');
 const GoalAllocation = require('../models/GoalAllocation');
 const budgetRepository = require('../repositories/BudgetRepository');
-const IncomeCycle = require('../models/IncomeCycle');
+const { getCycleIdentifier } = require('../utils/incomeCycleUtils');
+const incomeCycleRepository = require('../repositories/IncomeCycleRepository');
 const transactionRepository = require('../repositories/TransactionRepository');
 
 // --- Income Sources ---
@@ -147,14 +148,14 @@ router.get('/summary', async (req, res) => {
   const { userId } = req.query;
   try {
     const incomeSources = await incomeRepository.findMany({ userId, status: 'active' });
-    const IncomeCycle = require('../models/IncomeCycle');
+
     
     let totalIncome = 0;
     let totalAllocations = 0;
     
     for (let src of incomeSources) {
-       const cycleId = IncomeCycle.getCycleIdentifier(src.frequency, new Date());
-       const confirmedCycle = await IncomeCycle.findOne({
+       const cycleId = getCycleIdentifier(src.frequency, new Date());
+       const confirmedCycle = await incomeCycleRepository.findOne({
            incomeSourceId: src._id,
            cycleIdentifier: cycleId,
            status: 'processed'
@@ -230,12 +231,12 @@ router.post('/process-cycle', async (req, res) => {
 
     if (!txn || !source) return res.status(404).json({ error: "Transaction or Income Source not found" });
 
-    const IncomeCycle = require('../models/IncomeCycle');
-    const cycleId = IncomeCycle.getCycleIdentifier(source.frequency, txn.date || new Date());
+
+    const cycleId = getCycleIdentifier(source.frequency, txn.date || new Date());
     console.log(`[Cashflow API] /process-cycle - Triggered for source ${source.name}, transaction ${txn._id}. CycleId: ${cycleId}`);
 
     // Validation: Ensure this cycle wasn't already processed
-    const existingCycle = await IncomeCycle.findOne({ 
+    const existingCycle = await incomeCycleRepository.findOne({ 
        incomeSourceId: source._id, 
        cycleIdentifier: cycleId, 
        status: 'processed' 
@@ -278,7 +279,7 @@ router.post('/process-cycle', async (req, res) => {
     const budgets = await budgetRepository.findMany({ userId });
     let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
 
-    const cycle = new IncomeCycle({
+    const cycle = await incomeCycleRepository.create({
       userId,
       incomeSourceId,
       transactionId,
@@ -291,8 +292,6 @@ router.post('/process-cycle', async (req, res) => {
       totalExpenses: 0, // at cycle start
       status: 'processed'
     });
-
-    await cycle.save();
     console.log(`[Cashflow API] /process-cycle - Created and saved IncomeCycle ${cycleId} with actual amount ₹${actualAmount}`);
 
     // Update the IncomeSource's lastReceivedDate if the transaction is newer

@@ -54,7 +54,7 @@ mongoose.connect(MONGODB_URI)
 
 // Routes
 async function autoProcessPastCycle(userId, transactionId, source, txnDate, actualAmount, cycleId) {
-    const IncomeCycle = require('./models/IncomeCycle');
+    const incomeCycleRepository = require('./repositories/IncomeCycleRepository');
     const GoalAllocation = require('./models/GoalAllocation');
     const goalRepository = require('./repositories/GoalRepository');
     const budgetRepository = require('./repositories/BudgetRepository');
@@ -72,7 +72,7 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
     const budgets = await budgetRepository.findMany({ userId });
     let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
 
-    const cycle = new IncomeCycle({
+    await incomeCycleRepository.create({
       userId,
       incomeSourceId: source._id,
       transactionId,
@@ -85,7 +85,6 @@ async function autoProcessPastCycle(userId, transactionId, source, txnDate, actu
       totalExpenses: 0,
       status: 'processed'
     });
-    await cycle.save();
 
     const freshSource = await incomeRepository.findById(source._id);
     if (!freshSource.lastReceivedDate || new Date(txnDate) > new Date(freshSource.lastReceivedDate)) {
@@ -861,7 +860,8 @@ app.get("/api/gmail/scan", async (req, res) => {
              // Check if it matches an Income Source
              if (type === 'credit') {
                const incomeRepository = require('./repositories/IncomeRepository');
-               const IncomeCycle = mongoose.model('IncomeCycle');
+               const incomeCycleRepository = require('./repositories/IncomeCycleRepository');
+               const { getCycleIdentifier } = require('./utils/incomeCycleUtils');
                const sources = await incomeRepository.findMany({ userId, status: 'active' });
                
                const match = sources.find(s => {
@@ -875,8 +875,8 @@ app.get("/api/gmail/scan", async (req, res) => {
                });
                
                if (match) {
-                 const cycleId = IncomeCycle.getCycleIdentifier(match.frequency, emailDate);
-                 const existingCycle = await IncomeCycle.findOne({ 
+                 const cycleId = getCycleIdentifier(match.frequency, emailDate);
+                 const existingCycle = await incomeCycleRepository.findOne({ 
                    incomeSourceId: match._id, 
                    cycleIdentifier: cycleId, 
                    status: 'processed' 
@@ -911,7 +911,7 @@ app.get("/api/gmail/scan", async (req, res) => {
                  // Time-based heuristic fallback if sender didn't match
                  console.log(`[Income Pipeline] No sender match. Falling back to time-based heuristic.`);
                  for (const s of sources) {
-                   const lastCycle = await IncomeCycle.findOne({ incomeSourceId: s._id, status: 'processed' }).sort({ cycleDate: -1 });
+                   const lastCycle = await incomeCycleRepository.findOne({ incomeSourceId: s._id, status: 'processed' }, null, { sort: { cycleDate: -1 } });
                    let referenceDate = null;
                    if (lastCycle) {
                      referenceDate = new Date(lastCycle.cycleDate);
@@ -938,8 +938,8 @@ app.get("/api/gmail/scan", async (req, res) => {
                      
                      if (isTimeMatch) {
                        console.log(`[Income Pipeline] Time-based match found for source ${s.name} (daysDiff: ${daysDiff.toFixed(1)}). Requesting verification.`);
-                       const cycleId = IncomeCycle.getCycleIdentifier(s.frequency, emailDate);
-                       const existingCycle = await IncomeCycle.findOne({ 
+                       const cycleId = getCycleIdentifier(s.frequency, emailDate);
+                       const existingCycle = await incomeCycleRepository.findOne({ 
                          incomeSourceId: s._id, 
                          cycleIdentifier: cycleId, 
                          status: 'processed' 
