@@ -22,7 +22,7 @@ const userRepository = require('./repositories/UserRepository');
 const gmailSyncRepository = require('./repositories/GmailSyncRepository');
 const transactionRepository = require('./repositories/TransactionRepository');
 const notificationRepository = require('./repositories/NotificationRepository');
-const Subscription = require("./models/Subscription");
+const subscriptionRepository = require('./repositories/SubscriptionRepository');
 
 // Plan Alternatives Database (Phase 2: Plan Optimization)
 const PLAN_ALTERNATIVES = {
@@ -115,7 +115,7 @@ app.post("/api/subscriptions", async (req, res) => {
        return res.json({ success: true, transaction: newTxn });
     }
 
-    const newSub = new Subscription({
+    const newSub = await subscriptionRepository.create({
       userId,
       name,
       price: parsedPrice,
@@ -128,8 +128,6 @@ app.post("/api/subscriptions", async (req, res) => {
       billingCycle: billingCycle || 'monthly',
       externalId // Save the reference to prevent duplicates
     });
-    
-    await newSub.save();
     res.json({ success: true, subscription: newSub });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -139,7 +137,7 @@ app.post("/api/subscriptions", async (req, res) => {
 app.get("/api/subscriptions", async (req, res) => {
   const { userId } = req.query;
   try {
-    const subscriptions = await Subscription.find(userId ? { userId } : {});
+    const subscriptions = await subscriptionRepository.findMany(userId ? { userId } : {});
     const subsWithHealth = subscriptions.map(s => {
         const cycleDays = s.billingCycle === 'monthly' ? 30 : 365;
         const uniqueDaysUsed = new Set(s.usageLogs.map(log => new Date(log).toISOString().split('T')[0])).size;
@@ -177,7 +175,7 @@ app.post("/api/subscriptions/usage", async (req, res) => {
     if (usedRecently) {
       update.$push = { usageLogs: new Date() };
     }
-    const sub = await Subscription.findByIdAndUpdate(id, update, { new: true });
+    const sub = await subscriptionRepository.findByIdAndUpdate(id, update, { new: true });
     res.json({ success: true, updatedSubscription: sub });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -187,7 +185,7 @@ app.post("/api/subscriptions/usage", async (req, res) => {
 app.post("/api/subscriptions/cancel", async (req, res) => {
   const { id } = req.body;
   try {
-    const sub = await Subscription.findByIdAndDelete(id);
+    const sub = await subscriptionRepository.findByIdAndDelete(id);
     res.json({ success: true, cancelled: sub });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -197,7 +195,7 @@ app.post("/api/subscriptions/cancel", async (req, res) => {
 app.get("/api/dashboard/stats", async (req, res) => {
   const { userId } = req.query;
   try {
-    const subs = await Subscription.find({ userId });
+    const subs = await subscriptionRepository.findMany({ userId });
     const user = await userRepository.findById(userId);
     
     // Get recent transactions to accurately calculate monthly spend
@@ -301,7 +299,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
 app.get("/api/recommendations", async (req, res) => {
   const { userId } = req.query;
   try {
-    const subs = await Subscription.find({ userId });
+    const subs = await subscriptionRepository.findMany({ userId });
     const recommendations = [];
 
     subs.forEach(sub => {
@@ -436,7 +434,7 @@ app.post("/api/users/sync", async (req, res) => {
       const canonicalId = user._id.toString();
       console.log(`⚠️ [Sync] Merging stale user ${staleUserId} → ${canonicalId}`);
       await Promise.all([
-        Subscription.updateMany({ userId: staleUserId }, { $set: { userId: canonicalId } }),
+        subscriptionRepository.updateMany({ userId: staleUserId }, { $set: { userId: canonicalId } }),
         transactionRepository.updateMany(  { userId: staleUserId }, { $set: { userId: canonicalId } }),
         notificationRepository.updateMany( { userId: staleUserId }, { $set: { userId: canonicalId } }),
       ]);
@@ -505,7 +503,7 @@ app.get("/api/users/gmail-status", async (req, res) => {
 app.get("/api/notifications", async (req, res) => {
   const { userId } = req.query;
   try {
-    const subs = await Subscription.find({ userId });
+    const subs = await subscriptionRepository.findMany({ userId });
     for (const sub of subs) {
       const daysUntilBilling = Math.ceil((new Date(sub.nextBillingDate) - new Date()) / (1000 * 60 * 60 * 24));
       
@@ -680,7 +678,7 @@ app.get("/api/gmail/scan", async (req, res) => {
     // Bulk check for existing transactions/subscriptions to avoid rescanning
     const messageIds = messages.map(m => m.id);
     const existingTxns = await transactionRepository.findMany({ userId, externalId: { $in: messageIds } }, { projection: 'externalId', lean: true });
-    const existingSubs = await mongoose.model('Subscription').find({ userId, externalId: { $in: messageIds } }, 'externalId').lean();
+    const existingSubs = await subscriptionRepository.findMany({ userId, externalId: { $in: messageIds } }, { projection: 'externalId', lean: true });
     
     const existingIds = new Set([
       ...existingTxns.map(t => t.externalId),
@@ -784,9 +782,8 @@ app.get("/api/gmail/scan", async (req, res) => {
         console.log(`[Gmail Scan] Parsed Alert details - Vendor: ${vendorName} | Price: ${price} | Category: ${category} | Type: ${type}`);
 
         // Filter out if already added as a subscription or transaction
-        const Subscription = mongoose.model('Subscription');
         
-        const alreadyExistsInSub = await Subscription.findOne({ userId, externalId: msg.id });
+        const alreadyExistsInSub = await subscriptionRepository.findOne({ userId, externalId: msg.id });
         const alreadyExistsInTxn = await transactionRepository.findOne({ userId, externalId: msg.id });
 
         // Semantic deduplication: Check for same amount, name, type within a 2-hour window
@@ -1093,7 +1090,7 @@ app.get("/api/insights/patterns", async (req, res) => {
 app.post("/api/chat", async (req, res) => {
   const { message, userId } = req.body;
   try {
-    const subs = await Subscription.find(userId ? { userId } : {});
+    const subs = await subscriptionRepository.findMany(userId ? { userId } : {});
     const msg = message.toLowerCase();
     
     let reply = "I am your SubZero Financial Assistant. I analyze your subscriptions and find you savings. How can I help you today?";
