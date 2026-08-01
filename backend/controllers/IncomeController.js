@@ -1,9 +1,9 @@
-const incomeRepository = require('../repositories/IncomeRepository');
+const incomeService = require('../services/IncomeService');
 
 class IncomeController {
   static async list(req, res) {
     try {
-      const sources = await incomeRepository.findMany({ userId: req.query.userId });
+      const sources = await incomeService.list(req.query.userId);
       res.json(sources);
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
@@ -12,7 +12,7 @@ class IncomeController {
 
   static async create(req, res) {
     try {
-      const newSource = await incomeRepository.create(req.body);
+      const newSource = await incomeService.create(req.body);
       res.json({ success: true, incomeSource: newSource });
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
@@ -21,20 +21,24 @@ class IncomeController {
 
   static async delete(req, res) {
     try {
-      const result = await incomeRepository.findByIdAndDelete(req.params.id);
-      if (!result) return res.status(404).json({ success: false, error: 'Income source not found' });
+      await incomeService.delete(req.params.id);
       res.json({ success: true, message: 'Income source deleted' });
     } catch (error) {
+      if (error.message === 'Income source not found') {
+         return res.status(404).json({ success: false, error: error.message });
+      }
       res.status(500).json({ success: false, error: error.message });
     }
   }
 
   static async update(req, res) {
     try {
-      const result = await incomeRepository.findByIdAndUpdate(req.params.id, req.body, { new: true });
-      if (!result) return res.status(404).json({ success: false, error: 'Income source not found' });
+      const result = await incomeService.update(req.params.id, req.body);
       res.json({ success: true, incomeSource: result });
     } catch (error) {
+      if (error.message === 'Income source not found') {
+         return res.status(404).json({ success: false, error: error.message });
+      }
       res.status(500).json({ success: false, error: error.message });
     }
   }
