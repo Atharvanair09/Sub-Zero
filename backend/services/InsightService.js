@@ -3,6 +3,7 @@ const transactionRepository = require('../repositories/TransactionRepository');
 const FinancialHealthEngine = require('../domain/engines/FinancialHealthEngine');
 const CategorizationEngine = require('../domain/engines/CategorizationEngine');
 const DateCycleEngine = require('../domain/engines/DateCycleEngine');
+const mongoose = require('mongoose');
 
 const PLAN_ALTERNATIVES = {
   'Netflix': [
@@ -70,38 +71,54 @@ class InsightService {
   }
 
   static async getPatterns(userId) {
-    const txns = await transactionRepository.findMany(userId ? { userId } : {});
+    const objectUserId = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+    const matchQuery = userId ? { userId: objectUserId } : {};
+
+    const [foodAgg, shoppingAgg] = await Promise.all([
+      transactionRepository.aggregate([
+        { $match: matchQuery },
+        { $match: {
+            $or: [
+              { category: { $in: ['Food', 'Zomato', 'Swiggy', 'Blinkit', 'Zepto'] } },
+              { name: { $regex: 'zomato|swiggy|uber eats|blinkit|zepto', $options: 'i' } }
+            ]
+        }},
+        { $project: { _id: 1, amount: 1, date: 1 } }
+      ]),
+      transactionRepository.aggregate([
+        { $match: matchQuery },
+        { $match: {
+            $or: [
+              { category: { $in: ['Shopping', 'Amazon', 'Flipkart'] } },
+              { name: { $regex: 'amazon|flipkart|myntra', $options: 'i' } }
+            ]
+        }},
+        { $group: { _id: null, count: { $sum: 1 }, totalSpend: { $sum: '$amount' } } }
+      ])
+    ]);
     
-    let foodTxns = [];
-    let shoppingTxns = [];
     let weekendFood = 0;
     let lateNightOrders = 0;
     let totalFoodSpend = 0;
 
-    txns.forEach(t => {
-      const isFood = CategorizationEngine.isFood(t.name, t.category);
-      const isShopping = CategorizationEngine.isShopping(t.name, t.category);
-      
+    foodAgg.forEach(t => {
+      totalFoodSpend += t.amount || 0;
       const date = new Date(t.date || Date.now());
-
-      if (isFood) {
-        foodTxns.push(t);
-        totalFoodSpend += t.amount || 0;
-        if (DateCycleEngine.isWeekend(date)) weekendFood++;
-        if (DateCycleEngine.isLateNight(date)) lateNightOrders++;
-      }
-      if (isShopping) {
-        shoppingTxns.push(t);
-      }
+      if (DateCycleEngine.isWeekend(date)) weekendFood++;
+      if (DateCycleEngine.isLateNight(date)) lateNightOrders++;
     });
+
+    const foodTxnCount = foodAgg.length;
+    const shoppingTxnCount = shoppingAgg.length > 0 ? shoppingAgg[0].count : 0;
+    const shopSpend = shoppingAgg.length > 0 ? shoppingAgg[0].totalSpend : 0;
 
     const insights = [];
 
-    if (foodTxns.length >= 2) {
-      if (weekendFood > foodTxns.length * 0.5) {
+    if (foodTxnCount >= 2) {
+      if (weekendFood > foodTxnCount * 0.5) {
         insights.push({ type: 'food', title: 'Weekend Craver', message: 'You order food mostly on weekends. Try meal-prepping on Sundays to save here!' });
       } else {
-        const potentialSavings = FinancialHealthEngine.calculatePotentialFoodSavings(totalFoodSpend, foodTxns.length);
+        const potentialSavings = FinancialHealthEngine.calculatePotentialFoodSavings(totalFoodSpend, foodTxnCount);
         insights.push({ type: 'food', title: 'High Frequency', message: `You order food frequently. Reducing this by 2 orders/wk helps you save ₹${potentialSavings || 800}/mo!` });
       }
     }
@@ -110,8 +127,7 @@ class InsightService {
       insights.push({ type: 'behavioral', title: 'Late Night Spikes', message: `Your spending spikes after 10 PM. Try keeping a late-night snack box at home!` });
     }
 
-    if (shoppingTxns.length >= 1) {
-      const shopSpend = CategorizationEngine.calculateCategorySpend(shoppingTxns, 'Shopping');
+    if (shoppingTxnCount >= 1) {
       insights.push({ type: 'shopping', title: 'Impulse Spikes', message: `Shopping impulse detected (₹${Math.round(shopSpend)}). Wait 24h before closing checkout to verify if it's a need.` });
     }
 

@@ -10,26 +10,50 @@ const CashFlowEngine = require('../domain/engines/CashFlowEngine');
 
 class DashboardService {
   static async getStats(userId) {
-    const subs = await subscriptionRepository.findMany({ userId });
     const user = await userRepository.findById(userId);
-    
     const thirtyDaysAgo = DateCycleEngine.getDaysAgo(30);
-    const txns = await transactionRepository.findMany({ userId, date: { $gte: thirtyDaysAgo } });
     
+    const objectUserId = user ? user._id : userId;
+
+    const [txnStatsAgg, txnCategoryAgg, totalTxns, subs] = await Promise.all([
+      transactionRepository.aggregate([
+        { $match: { userId: objectUserId, date: { $gte: thirtyDaysAgo } } },
+        { $group: {
+            _id: null,
+            txnSpend: { $sum: '$amount' },
+            foodSpend: { $sum: { $cond: [{ $eq: ['$category', 'Food'] }, '$amount', 0] } },
+            shoppingSpend: { $sum: { $cond: [{ $eq: ['$category', 'Shopping'] }, '$amount', 0] } },
+            transportSpend: { $sum: { $cond: [{ $eq: ['$category', 'Transport'] }, '$amount', 0] } }
+        }}
+      ]),
+      transactionRepository.aggregate([
+        { $match: { userId: objectUserId, date: { $gte: thirtyDaysAgo } } },
+        { $group: { _id: '$category', total: { $sum: '$amount' } } }
+      ]),
+      transactionRepository.count({ userId: objectUserId, date: { $gte: thirtyDaysAgo } }),
+      subscriptionRepository.findMany({ userId: objectUserId })
+    ]);
+
+    const txnSpend = txnStatsAgg.length > 0 ? txnStatsAgg[0].txnSpend : 0;
+    const foodSpend = txnStatsAgg.length > 0 ? txnStatsAgg[0].foodSpend : 0;
+    const shoppingSpend = txnStatsAgg.length > 0 ? txnStatsAgg[0].shoppingSpend : 0;
+    const transportSpend = txnStatsAgg.length > 0 ? txnStatsAgg[0].transportSpend : 0;
+
     const subSpend = CashFlowEngine.calculateMonthlySubscriptionSpend(subs);
-    const txnSpend = CashFlowEngine.calculateTotalExpenses(txns);
     
     const monthlySpend = subSpend + txnSpend;
     const yearlyProjection = CashFlowEngine.calculateYearlyProjection(subSpend, txnSpend);
     
-    const foodSpend = CategorizationEngine.calculateCategorySpend(txns, 'Food');
-    const shoppingSpend = CategorizationEngine.calculateCategorySpend(txns, 'Shopping');
-    const transportSpend = CategorizationEngine.calculateCategorySpend(txns, 'Transport');
     const subPercent = monthlySpend > 0 ? (subSpend / monthlySpend) * 100 : 0;
-    
     const healthScore = FinancialHealthEngine.calculateTotalHealthScore(subs);
 
-    const categoryData = CategorizationEngine.calculateCategoryBreakdown(subs, txns);
+    const categoryData = {};
+    txnCategoryAgg.forEach(t => {
+      categoryData[t._id] = t.total;
+    });
+    subs.forEach(s => {
+      categoryData[s.category] = (categoryData[s.category] || 0) + s.price;
+    });
 
     const pieChart = Object.keys(categoryData).map(cat => ({
       name: cat,
@@ -67,7 +91,7 @@ class DashboardService {
       yearlyProjection,
       pieChart,
       totalSubs: subs.length,
-      totalTxns: txns.length,
+      totalTxns: totalTxns,
       foodSpend,
       shoppingSpend,
       transportSpend,

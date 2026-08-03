@@ -37,10 +37,11 @@ class GmailSyncService {
   }
 
   static async exchangeToken(code, state) {
+    const { encryptTokensObject } = require('../utils/encryption');
     const { tokens } = await oauth2Client.getToken(code);
     if (state) {
       await gmailSyncRepository.updateById(state, {
-        googleTokens: tokens,
+        googleTokens: encryptTokensObject(tokens),
         gmailConnected: true,
       });
     }
@@ -66,7 +67,8 @@ class GmailSyncService {
         await gmailSyncRepository.updateById(userId, { gmailConnected: true });
       }
     } else {
-      oauth2Client.setCredentials(user.googleTokens);
+      const { decryptTokensObject } = require('../utils/encryption');
+      oauth2Client.setCredentials(decryptTokensObject(user.googleTokens));
     }
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });

@@ -62,32 +62,39 @@ const NotificationController = require('./controllers/NotificationController');
 const GmailController = require('./controllers/GmailController');
 const ChatController = require('./controllers/ChatController');
 
+const validateRequest = require('./middlewares/validateRequest');
+const { schemas } = require('./schemas/index');
+
 // Routes
 app.use('/api/cashflow', require('./routes/cashflow'));
 
-app.post("/api/subscriptions", SubscriptionController.create);
-app.get("/api/subscriptions", SubscriptionController.list);
-app.post("/api/subscriptions/usage", SubscriptionController.logUsage);
-app.post("/api/subscriptions/cancel", SubscriptionController.cancel);
+app.post("/api/subscriptions", validateRequest(schemas.SubscriptionCreate), SubscriptionController.create);
+app.get("/api/subscriptions", validateRequest(schemas.SubscriptionList), SubscriptionController.list);
+app.post("/api/subscriptions/usage", validateRequest(schemas.SubscriptionLogUsage), SubscriptionController.logUsage);
+app.post("/api/subscriptions/cancel", validateRequest(schemas.SubscriptionCancel), SubscriptionController.cancel);
 
-app.get("/api/transactions", TransactionController.list);
+app.get("/api/transactions", validateRequest(schemas.TransactionList), TransactionController.list);
 
-app.get("/api/dashboard/stats", DashboardController.getStats);
-app.get("/api/recommendations", InsightController.getRecommendations);
+app.get("/api/dashboard/stats", validateRequest(schemas.DashboardStats), DashboardController.getStats);
+app.get("/api/recommendations", validateRequest(schemas.InsightRecommendations), InsightController.getRecommendations);
 
-app.post("/api/users/sync", UserController.sync);
-app.patch("/api/users/preferences", UserController.updatePreferences);
-app.get("/api/users/gmail-status", GmailController.getStatus);
+app.post("/api/users/sync", validateRequest(schemas.UserSync), UserController.sync);
+app.patch("/api/users/preferences", validateRequest(schemas.UserPreferences), UserController.updatePreferences);
+app.get("/api/users/gmail-status", validateRequest(schemas.GmailStatus), GmailController.getStatus);
 
-app.get("/api/notifications", NotificationController.list);
-app.post("/api/notifications/read", NotificationController.markRead);
+app.get("/api/notifications", validateRequest(schemas.NotificationList), NotificationController.list);
+app.post("/api/notifications/read", validateRequest(schemas.NotificationMarkRead), NotificationController.markRead);
 
-app.get("/api/auth/google/url", GmailController.getAuthUrl);
-app.get("/api/auth/google/callback", GmailController.authCallback);
-app.get("/api/gmail/scan", GmailController.scan);
+app.get("/api/auth/google/url", validateRequest(schemas.GmailAuthUrl), GmailController.getAuthUrl);
+app.get("/api/auth/google/callback", validateRequest(schemas.GmailCallback), GmailController.authCallback);
+app.get("/api/gmail/scan", validateRequest(schemas.GmailScan), GmailController.scan);
 
-app.get("/api/insights/patterns", InsightController.getPatterns);
-app.post("/api/chat", ChatController.chat);
+app.get("/api/insights/patterns", validateRequest(schemas.InsightPatterns), InsightController.getPatterns);
+app.post("/api/chat", validateRequest(schemas.Chat), ChatController.chat);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 [Backend Checkpoint] Server running on port ${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`🚀 [Backend Checkpoint] Server running on port ${PORT}`));
+}
+
+module.exports = app;

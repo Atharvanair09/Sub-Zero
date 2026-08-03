@@ -78,6 +78,10 @@ class GoalRepository {
   async distinct(field, filter = {}) {
     return await SavingsGoal.distinct(field, filter);
   }
+
+  async bulkWrite(ops, options = {}) {
+    return await SavingsGoal.bulkWrite(ops, options);
+  }
 }
 
 module.exports = new GoalRepository();

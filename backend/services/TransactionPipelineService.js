@@ -23,9 +23,14 @@ class TransactionPipelineService {
     
     const totalAllocations = GoalAllocationEngine.calculateTotalAllocatedAmount(allocations, actualAmount);
     
-    for (let alloc of allocations) {
-      const amountToAdd = GoalAllocationEngine.calculateAmountToAdd(alloc, actualAmount);
-      await goalRepository.findByIdAndUpdate(alloc.goalId, { $inc: { currentAmount: amountToAdd } });
+    if (allocations.length > 0) {
+      const bulkOps = allocations.map(alloc => ({
+        updateOne: {
+          filter: { _id: alloc.goalId },
+          update: { $inc: { currentAmount: GoalAllocationEngine.calculateAmountToAdd(alloc, actualAmount) } }
+        }
+      }));
+      await goalRepository.bulkWrite(bulkOps);
     }
 
     const budgets = await budgetRepository.findMany({ userId });
@@ -214,12 +219,31 @@ class TransactionPipelineService {
                } else {
                    console.log(`[Income Pipeline] Cycle ${cycleId} already processed. Treated as normal credit.`);
                }
-             } else {
+              } else {
                console.log(`[Income Pipeline] No sender match. Falling back to time-based heuristic.`);
+               
+               const sourceIds = sources.map(s => s._id);
+               const cycleIds = sources.map(s => IncomeCycleEngine.getCycleId(s.frequency, emailDate));
+               
+               const [latestCyclesAgg, existingCycles] = await Promise.all([
+                  incomeCycleRepository.aggregate([
+                    { $match: { incomeSourceId: { $in: sourceIds }, status: 'processed' } },
+                    { $sort: { cycleDate: -1 } },
+                    { $group: { _id: '$incomeSourceId', cycleDate: { $first: '$cycleDate' } } }
+                  ]),
+                  incomeCycleRepository.findMany({
+                    incomeSourceId: { $in: sourceIds },
+                    cycleIdentifier: { $in: cycleIds },
+                    status: 'processed'
+                  })
+               ]);
+               
                for (const s of sources) {
-                 const lastCycle = await incomeCycleRepository.findOne({ incomeSourceId: s._id, status: 'processed' }, null, { sort: { cycleDate: -1 } });
+                 const lastCycleAgg = latestCyclesAgg.find(lc => lc._id.toString() === s._id.toString());
+                 const lastCycleDate = lastCycleAgg ? lastCycleAgg.cycleDate : null;
+                 
                  const referenceDate = DateCycleEngine.getIncomeReferenceDate(
-                     lastCycle ? lastCycle.cycleDate : null, 
+                     lastCycleDate, 
                      s.nextExpectedDate, 
                      s.createdAt, 
                      s.frequency
@@ -232,11 +256,10 @@ class TransactionPipelineService {
                    if (isTimeMatch) {
                      console.log(`[Income Pipeline] Time-based match found for source ${s.name} (daysDiff: ${daysDiff.toFixed(1)}). Requesting verification.`);
                      const cycleId = IncomeCycleEngine.getCycleId(s.frequency, emailDate);
-                     const existingCycle = await incomeCycleRepository.findOne({ 
-                       incomeSourceId: s._id, 
-                       cycleIdentifier: cycleId, 
-                       status: 'processed' 
-                     });
+                     const existingCycle = existingCycles.find(c => 
+                       c.incomeSourceId.toString() === s._id.toString() && 
+                       c.cycleIdentifier === cycleId
+                     );
                      
                      if (!existingCycle) {
                         if (IncomeDetectionEngine.isAmountMatch(numericPrice, s.amount)) {

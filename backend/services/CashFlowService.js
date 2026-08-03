@@ -19,13 +19,27 @@ class CashFlowService {
     let totalIncome = 0;
     let totalAllocations = 0;
     
+    const sourceIds = incomeSources.map(s => s._id);
+    const currentDate = new Date();
+    const cycleIds = incomeSources.map(s => IncomeCycleEngine.getCycleId(s.frequency, currentDate));
+    
+    const allConfirmedCycles = await incomeCycleRepository.findMany({
+       incomeSourceId: { $in: sourceIds },
+       cycleIdentifier: { $in: cycleIds },
+       status: 'processed'
+    });
+    
+    const allAllocations = await goalAllocationRepository.findMany({ 
+       incomeSourceId: { $in: sourceIds }, 
+       status: 'active' 
+    });
+    
     for (let src of incomeSources) {
-       const cycleId = IncomeCycleEngine.getCycleId(src.frequency, new Date());
-       const confirmedCycle = await incomeCycleRepository.findOne({
-           incomeSourceId: src._id,
-           cycleIdentifier: cycleId,
-           status: 'processed'
-       });
+       const cycleId = IncomeCycleEngine.getCycleId(src.frequency, currentDate);
+       const confirmedCycle = allConfirmedCycles.find(c => 
+           c.incomeSourceId.toString() === src._id.toString() && 
+           c.cycleIdentifier === cycleId
+       );
        
        let incomeForSource = src.amount;
        if (confirmedCycle) {
@@ -36,7 +50,7 @@ class CashFlowService {
        }
        totalIncome += incomeForSource;
        
-       const allocations = await goalAllocationRepository.findMany({ incomeSourceId: src._id, status: 'active' });
+       const allocations = allAllocations.filter(a => a.incomeSourceId.toString() === src._id.toString());
        totalAllocations += GoalAllocationEngine.calculateTotalAllocatedAmount(allocations, incomeForSource);
     }
 
@@ -101,11 +115,14 @@ class CashFlowService {
     const allocations = await goalAllocationRepository.findMany({ incomeSourceId, status: 'active' });
     const totalAllocations = GoalAllocationEngine.calculateTotalAllocatedAmount(allocations, actualAmount);
     
-    for (let alloc of allocations) {
-      const amountToAdd = GoalAllocationEngine.calculateAmountToAdd(alloc, actualAmount);
-      await goalRepository.findByIdAndUpdate(alloc.goalId, {
-        $inc: { currentAmount: amountToAdd }
-      });
+    if (allocations.length > 0) {
+      const bulkOps = allocations.map(alloc => ({
+        updateOne: {
+          filter: { _id: alloc.goalId },
+          update: { $inc: { currentAmount: GoalAllocationEngine.calculateAmountToAdd(alloc, actualAmount) } }
+        }
+      }));
+      await goalRepository.bulkWrite(bulkOps);
     }
 
     const budgets = await budgetRepository.findMany({ userId });
