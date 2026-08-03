@@ -1,12 +1,13 @@
 const subscriptionRepository = require('../repositories/SubscriptionRepository');
 const transactionRepository = require('../repositories/TransactionRepository');
+const CategorizationEngine = require('../domain/engines/CategorizationEngine');
+const FinancialHealthEngine = require('../domain/engines/FinancialHealthEngine');
 
 class SubscriptionService {
   static async createSubscription(data) {
     const { userId, name, price, plan, logo, color, category, billingCycle, nextBillingDate, externalId, type } = data;
     
-    const isTransaction = ['Food', 'Travel', 'Bank Transaction', 'Shopping'].includes(category) || 
-                          /zomato|swiggy|uber|ola|blinkit|zepto|amazon (?!prime)/i.test(name);
+    const isTransaction = CategorizationEngine.isTransaction(name, category);
     const parsedPrice = parseFloat(price);
 
     if (isTransaction) {
@@ -15,7 +16,7 @@ class SubscriptionService {
          name,
          amount: parsedPrice,
          category: category || 'Bank Transaction',
-         logo: logo || `https://www.google.com/s2/favicons?sz=128&domain=${name.toLowerCase().replace(/\s/g, '')}.com`,
+         logo: logo || `https://www.google.com/s2/favicons?sz=128&domain=${name.toLowerCase().replace(/\\s/g, '')}.com`,
          externalId,
          type: type || 'debit'
        });
@@ -41,17 +42,10 @@ class SubscriptionService {
   static async listSubscriptions(userId) {
     const subscriptions = await subscriptionRepository.findMany(userId ? { userId } : {});
     return subscriptions.map(s => {
-        const cycleDays = s.billingCycle === 'monthly' ? 30 : 365;
-        const uniqueDaysUsed = new Set(s.usageLogs.map(log => new Date(log).toISOString().split('T')[0])).size;
-        let itemScore = (uniqueDaysUsed / cycleDays) * 100;
-        if (!s.usedRecently) itemScore -= 30;
-        if (s.price < 500 && uniqueDaysUsed > 5) itemScore += 20;
-        itemScore = Math.min(Math.max(0, itemScore), 100);
-        if(uniqueDaysUsed === 0 && s.usedRecently) itemScore = 85; 
-
+        const itemScore = FinancialHealthEngine.calculateItemHealthScore(s.usageLogs, s.billingCycle, s.usedRecently, s.price);
         return {
           ...s.toObject(),
-          healthScore: Math.round(itemScore)
+          healthScore: itemScore
         };
     });
   }

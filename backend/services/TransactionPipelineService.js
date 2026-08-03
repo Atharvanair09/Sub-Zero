@@ -6,21 +6,30 @@ const incomeCycleRepository = require('../repositories/IncomeCycleRepository');
 const goalAllocationRepository = require('../repositories/GoalAllocationRepository');
 const goalRepository = require('../repositories/GoalRepository');
 const budgetRepository = require('../repositories/BudgetRepository');
-const { getCycleIdentifier } = require('../utils/incomeCycleUtils');
+
+const DateCycleEngine = require('../domain/engines/DateCycleEngine');
+const CategorizationEngine = require('../domain/engines/CategorizationEngine');
+const MerchantNormalizationEngine = require('../domain/engines/MerchantNormalizationEngine');
+const TransactionParsingEngine = require('../domain/engines/TransactionParsingEngine');
+const DuplicateDetectionEngine = require('../domain/engines/DuplicateDetectionEngine');
+const IncomeDetectionEngine = require('../domain/engines/IncomeDetectionEngine');
+const IncomeCycleEngine = require('../domain/engines/IncomeCycleEngine');
+const GoalAllocationEngine = require('../domain/engines/GoalAllocationEngine');
+const BudgetAllocationEngine = require('../domain/engines/BudgetAllocationEngine');
 
 class TransactionPipelineService {
   static async autoProcessPastCycle(userId, transactionId, source, txnDate, actualAmount, cycleId) {
     const allocations = await goalAllocationRepository.findMany({ incomeSourceId: source._id, status: 'active' });
-    let totalAllocations = 0;
+    
+    const totalAllocations = GoalAllocationEngine.calculateTotalAllocatedAmount(allocations, actualAmount);
     
     for (let alloc of allocations) {
-      const amountToAdd = alloc.allocationType === 'fixed' ? alloc.amountOrPercentage : (actualAmount * alloc.amountOrPercentage) / 100;
-      totalAllocations += amountToAdd;
+      const amountToAdd = GoalAllocationEngine.calculateAmountToAdd(alloc, actualAmount);
       await goalRepository.findByIdAndUpdate(alloc.goalId, { $inc: { currentAmount: amountToAdd } });
     }
 
     const budgets = await budgetRepository.findMany({ userId });
-    let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
+    const budgetReservations = BudgetAllocationEngine.calculateTotalReservations(budgets);
 
     await incomeCycleRepository.create({
       userId,
@@ -37,7 +46,8 @@ class TransactionPipelineService {
     });
 
     const freshSource = await incomeRepository.findById(source._id);
-    if (!freshSource.lastReceivedDate || new Date(txnDate) > new Date(freshSource.lastReceivedDate)) {
+    const lastReceived = freshSource.lastReceivedDate;
+    if (!lastReceived || new Date(txnDate) > new Date(lastReceived)) {
       await incomeRepository.updateOne({ _id: source._id }, { $set: { lastReceivedDate: txnDate } });
     }
     console.log(`[Income Pipeline] Successfully auto-processed cycle ${cycleId} for source ${source.name}. Allocated: ₹${totalAllocations}`);
@@ -45,7 +55,6 @@ class TransactionPipelineService {
 
   static async processEmail({ userId, msgId, emailDate, subject, snippet, fullBody, headers, autoSave, detected }) {
     const { parseEmail, extractCreditSender, validateTransactionEmail } = require("../../src/parser/index");
-    const { categorizeTransaction } = require("../../src/parser/categorizer");
     
     const textToScan = subject + " " + snippet + " " + fullBody;
     const validationResult = validateTransactionEmail(subject, snippet, fullBody);
@@ -81,9 +90,8 @@ class TransactionPipelineService {
            }
        }
     } else {
-       // Fallback to simple detection
-       if (/\b(credited|credit|received|refunded|deposited|reversal)\b/i.test(textToScan)) {
-          type = 'credit';
+       type = TransactionParsingEngine.detectTypeFallback(textToScan);
+       if (type === 'credit') {
           const creditData = extractCreditSender(textToScan);
           if (creditData.displayTitle !== "Unknown Sender") {
                vendorName = creditData.displayTitle.toUpperCase();
@@ -91,55 +99,41 @@ class TransactionPipelineService {
                vendorName = 'HDFC CREDIT';
           }
        } else {
-          type = 'debit';
           vendorName = 'HDFC DEBIT';
        }
     }
 
-    // If price is still "0" or null, try extracting it manually (useful for generic VPAs where we didn't extract amount)
     if (!price || price === "0") {
-       const priceMatch = textToScan.match(/(?:₹|\$|rs\.?|usd|inr)\s?(\d+(?:[.,]\d{2})?)/i);
-       price = priceMatch ? priceMatch[1] : "0";
+       price = TransactionParsingEngine.extractPrice(textToScan);
     }
 
     console.log(`[Gmail Scan] Parsing email ID: ${msgId} | Detected Type: ${type}`);
     
     let category = "Others";
     if (vendorName) {
-      category = categorizeTransaction(vendorName, textToScan);
+      category = CategorizationEngine.getTransactionCategory(vendorName, textToScan);
       console.log(`[Gmail Scan] Parsed Alert details - Vendor: ${vendorName} | Price: ${price} | Category: ${category} | Type: ${type}`);
 
-      // Filter out if already added as a subscription or transaction
       const alreadyExistsInSub = await subscriptionRepository.findOne({ userId, externalId: msgId });
       const alreadyExistsInTxn = await transactionRepository.findOne({ userId, externalId: msgId });
 
-      // Semantic deduplication: Check for same amount, name, type within a 2-hour window
-      const windowStart = new Date(emailDate.getTime() - 2 * 60 * 60 * 1000);
-      const windowEnd = new Date(emailDate.getTime() + 2 * 60 * 60 * 1000);
       const numericPrice = parseFloat(price.replace(',', ''));
+      const window = DateCycleEngine.getDeduplicationWindow(emailDate);
 
-      // More robust deduplication logic to catch bank alerts vs specific merchant receipts
       const potentialDuplicates = await transactionRepository.findMany({
           userId,
           amount: numericPrice,
           type: type,
-          date: { $gte: windowStart, $lte: windowEnd }
+          date: { $gte: window.windowStart, $lte: window.windowEnd }
       });
 
       let duplicateTxn = null;
       for (const pt of potentialDuplicates) {
-          const name1 = vendorName.toLowerCase();
-          const name2 = pt.name.toLowerCase();
-          if (name1 === name2 || name1.includes(name2) || name2.includes(name1) || 
-              name1.includes('hdfc') || name2.includes('hdfc') || name1.includes('unknown') || name2.includes('unknown') ||
-              name1.includes('upi') || name2.includes('upi')) {
+          if (DuplicateDetectionEngine.isSemanticDuplicate(vendorName, pt.name, type, pt.type, numericPrice, pt.amount)) {
               duplicateTxn = pt;
+              const betterName = MerchantNormalizationEngine.getMostSpecificName(vendorName, pt.name);
               
-              // If the incoming transaction has a better/more specific name, update the generic one
-              const newIsGeneric = name1.includes('hdfc') || name1.includes('unknown') || name1.includes('upi');
-              const oldIsGeneric = name2.includes('hdfc') || name2.includes('unknown') || name2.includes('upi');
-              
-              if (oldIsGeneric && !newIsGeneric) {
+              if (betterName === vendorName && pt.name !== vendorName) {
                   pt.name = vendorName;
                   pt.category = category;
                   if (autoSave === 'true') {
@@ -152,17 +146,11 @@ class TransactionPipelineService {
 
       let alreadyInDetected = null;
       for (const d of detected) {
-          if (parseFloat(d.price) === numericPrice && d.type === type && Math.abs(d.date - emailDate.getTime()) < 2 * 60 * 60 * 1000) {
-              const name1 = vendorName.toLowerCase();
-              const name2 = d.name.toLowerCase();
-              if (name1 === name2 || name1.includes(name2) || name2.includes(name1) || 
-                  name1.includes('hdfc') || name2.includes('hdfc') || name1.includes('unknown') || name2.includes('unknown') ||
-                  name1.includes('upi') || name2.includes('upi')) {
+          if (DateCycleEngine.isWithinDetectionWindow(d.date, emailDate.getTime())) {
+              if (DuplicateDetectionEngine.isSemanticDuplicate(vendorName, d.name, type, d.type, numericPrice, d.price)) {
                   alreadyInDetected = d;
-                  
-                  const newIsGeneric = name1.includes('hdfc') || name1.includes('unknown') || name1.includes('upi');
-                  const oldIsGeneric = name2.includes('hdfc') || name2.includes('unknown') || name2.includes('upi');
-                  if (oldIsGeneric && !newIsGeneric) {
+                  const betterName = MerchantNormalizationEngine.getMostSpecificName(vendorName, d.name);
+                  if (betterName === vendorName && d.name !== vendorName) {
                       d.name = vendorName;
                       d.category = category;
                   }
@@ -184,22 +172,18 @@ class TransactionPipelineService {
              date: emailDate
            });
 
-           // Check if it matches an Income Source
            if (type === 'credit') {
              const sources = await incomeRepository.findMany({ userId, status: 'active' });
              
              const match = sources.find(s => {
-               const expectedSender = (s.expectedSender || s.name).toLowerCase();
-               // Strip generic keywords
-               const cleanExpected = expectedSender.replace(/\b(upi|hdfc|bank)\b/gi, '').trim();
-               const cleanVendor = vendorName.toLowerCase().replace(/\b(upi|hdfc|bank)\b/gi, '').trim();
-               const isMatch = cleanVendor.includes(cleanExpected) || cleanExpected.includes(cleanVendor);
-               console.log(`[Income Pipeline] Match check - Expected: '${cleanExpected}', Vendor: '${cleanVendor}', Matched: ${isMatch}`);
+               const expectedSender = s.expectedSender || s.name;
+               const isMatch = IncomeDetectionEngine.isSourceMatch(vendorName, expectedSender);
+               console.log(`[Income Pipeline] Match check - Expected: '${expectedSender}', Vendor: '${vendorName}', Matched: ${isMatch}`);
                return isMatch;
              });
              
              if (match) {
-               const cycleId = getCycleIdentifier(match.frequency, emailDate);
+               const cycleId = IncomeCycleEngine.getCycleId(match.frequency, emailDate);
                const existingCycle = await incomeCycleRepository.findOne({ 
                  incomeSourceId: match._id, 
                  cycleIdentifier: cycleId, 
@@ -209,7 +193,7 @@ class TransactionPipelineService {
                if (!existingCycle) {
                    console.log(`[Income Pipeline] No existing cycle found for ${cycleId}, checking amount difference.`);
                    
-                   if (Math.abs(match.amount - numericPrice) <= 100) {
+                   if (IncomeDetectionEngine.isAmountMatch(numericPrice, match.amount)) {
                        console.log(`[Income Pipeline] Amount matches expected (diff <= 100). Auto-processing cycle ${cycleId}.`);
                        await TransactionPipelineService.autoProcessPastCycle(userId, newTxn._id, match, emailDate, numericPrice, cycleId);
                    } else {
@@ -230,39 +214,24 @@ class TransactionPipelineService {
                } else {
                    console.log(`[Income Pipeline] Cycle ${cycleId} already processed. Treated as normal credit.`);
                }
-               // If existingCycle exists, it's treated as normal credit.
              } else {
-               // Time-based heuristic fallback if sender didn't match
                console.log(`[Income Pipeline] No sender match. Falling back to time-based heuristic.`);
                for (const s of sources) {
                  const lastCycle = await incomeCycleRepository.findOne({ incomeSourceId: s._id, status: 'processed' }, null, { sort: { cycleDate: -1 } });
-                 let referenceDate = null;
-                 if (lastCycle) {
-                   referenceDate = new Date(lastCycle.cycleDate);
-                 } else if (s.nextExpectedDate) {
-                   referenceDate = new Date(s.nextExpectedDate);
-                   if (s.frequency === 'monthly') referenceDate.setMonth(referenceDate.getMonth() - 1);
-                   else if (s.frequency === 'biweekly') referenceDate.setDate(referenceDate.getDate() - 14);
-                   else if (s.frequency === 'weekly') referenceDate.setDate(referenceDate.getDate() - 7);
-                 } else {
-                   referenceDate = new Date(s.createdAt);
-                 }
+                 const referenceDate = DateCycleEngine.getIncomeReferenceDate(
+                     lastCycle ? lastCycle.cycleDate : null, 
+                     s.nextExpectedDate, 
+                     s.createdAt, 
+                     s.frequency
+                 );
                  
                  if (referenceDate) {
-                   const daysDiff = (emailDate.getTime() - referenceDate.getTime()) / (1000 * 3600 * 24);
-                   let isTimeMatch = false;
-                   
-                   if (s.frequency === 'monthly' && daysDiff >= 26 && daysDiff <= 35) {
-                     isTimeMatch = true;
-                   } else if (s.frequency === 'weekly' && daysDiff >= 5 && daysDiff <= 9) {
-                     isTimeMatch = true;
-                   } else if (s.frequency === 'biweekly' && daysDiff >= 12 && daysDiff <= 16) {
-                     isTimeMatch = true;
-                   }
+                   const daysDiff = DateCycleEngine.getDaysDifference(emailDate, referenceDate);
+                   const isTimeMatch = DateCycleEngine.isIncomeTimeMatch(s.frequency, daysDiff);
                    
                    if (isTimeMatch) {
                      console.log(`[Income Pipeline] Time-based match found for source ${s.name} (daysDiff: ${daysDiff.toFixed(1)}). Requesting verification.`);
-                     const cycleId = getCycleIdentifier(s.frequency, emailDate);
+                     const cycleId = IncomeCycleEngine.getCycleId(s.frequency, emailDate);
                      const existingCycle = await incomeCycleRepository.findOne({ 
                        incomeSourceId: s._id, 
                        cycleIdentifier: cycleId, 
@@ -270,7 +239,7 @@ class TransactionPipelineService {
                      });
                      
                      if (!existingCycle) {
-                        if (Math.abs(s.amount - numericPrice) <= 100) {
+                        if (IncomeDetectionEngine.isAmountMatch(numericPrice, s.amount)) {
                             console.log(`[Income Pipeline] Amount matches expected (diff <= 100) in fallback. Auto-processing cycle ${cycleId}.`);
                             await TransactionPipelineService.autoProcessPastCycle(userId, newTxn._id, s, emailDate, numericPrice, cycleId);
                         } else {
@@ -288,7 +257,7 @@ class TransactionPipelineService {
                          { upsert: true }
                        );
                         }
-                        break; // Stop after finding the first probable time-based match
+                        break;
                      }
                    }
                  }

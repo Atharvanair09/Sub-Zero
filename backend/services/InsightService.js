@@ -1,7 +1,9 @@
 const subscriptionRepository = require('../repositories/SubscriptionRepository');
 const transactionRepository = require('../repositories/TransactionRepository');
+const FinancialHealthEngine = require('../domain/engines/FinancialHealthEngine');
+const CategorizationEngine = require('../domain/engines/CategorizationEngine');
+const DateCycleEngine = require('../domain/engines/DateCycleEngine');
 
-// Plan Alternatives Database (Phase 2: Plan Optimization)
 const PLAN_ALTERNATIVES = {
   'Netflix': [
     { name: 'Mobile Plan', price: 149, reason: 'You mostly watch on your phone.' },
@@ -23,21 +25,9 @@ class InsightService {
     const recommendations = [];
 
     subs.forEach(sub => {
-      const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
-      
-      // Calculate usage score: days_used / billing_cycle_days
-      const cycleDays = sub.billingCycle === 'monthly' ? 30 : 365;
-      
-      // Get unique days used in the last cycle
-      const uniqueDaysUsed = new Set(
-        sub.usageLogs
-          .filter(log => log > new Date(Date.now() - cycleDays * 24 * 60 * 60 * 1000))
-          .map(log => log.toISOString().split('T')[0])
-      ).size;
-      
-      const usageScore = uniqueDaysUsed / cycleDays;
+      const fifteenDaysAgo = DateCycleEngine.getDaysAgo(15);
+      const usageScore = FinancialHealthEngine.calculateUsageScore(sub.usageLogs, sub.billingCycle);
 
-      // Rule 1: Low Usage (Cancel)
       if (!sub.usedRecently || sub.lastUsed < fifteenDaysAgo || usageScore < 0.1) {
         recommendations.push({
           type: 'cancel',
@@ -48,7 +38,6 @@ class InsightService {
         });
       } 
       
-      // Rule 2: Plan Optimization (Downgrade/Alternative)
       const alternatives = PLAN_ALTERNATIVES[sub.name] || [];
       alternatives.forEach(alt => {
         if (alt.price < sub.price) {
@@ -64,13 +53,9 @@ class InsightService {
         }
       });
 
-      // Rule 3: Heavy usage on Weekend/Binge (Personalized Suggestion)
-      const weekendUsage = sub.usageLogs.filter(log => {
-        const day = new Date(log).getDay();
-        return day === 0 || day === 6;
-      }).length;
+      const weekendUsage = (sub.usageLogs || []).filter(log => DateCycleEngine.isWeekend(log)).length;
       
-      if (weekendUsage > sub.usageLogs.length * 0.8 && sub.plan === 'Premium') {
+      if (weekendUsage > (sub.usageLogs || []).length * 0.8 && sub.plan === 'Premium') {
         recommendations.push({
           type: 'pattern_match',
           subscriptionId: sub._id,
@@ -94,18 +79,16 @@ class InsightService {
     let totalFoodSpend = 0;
 
     txns.forEach(t => {
-      const isFood = ['Food', 'Zomato', 'Swiggy', 'Blinkit', 'Zepto'].includes(t.category) || /zomato|swiggy|uber eats/i.test(t.name);
-      const isShopping = ['Shopping', 'Amazon', 'Flipkart'].includes(t.category) || /amazon|flipkart|myntra/i.test(t.name);
+      const isFood = CategorizationEngine.isFood(t.name, t.category);
+      const isShopping = CategorizationEngine.isShopping(t.name, t.category);
       
       const date = new Date(t.date || Date.now());
-      const day = date.getDay();
-      const hour = date.getHours();
 
       if (isFood) {
         foodTxns.push(t);
         totalFoodSpend += t.amount || 0;
-        if (day === 0 || day === 6) weekendFood++;
-        if (hour >= 22 || hour <= 4) lateNightOrders++;
+        if (DateCycleEngine.isWeekend(date)) weekendFood++;
+        if (DateCycleEngine.isLateNight(date)) lateNightOrders++;
       }
       if (isShopping) {
         shoppingTxns.push(t);
@@ -114,24 +97,21 @@ class InsightService {
 
     const insights = [];
 
-    // Food behaviors
     if (foodTxns.length >= 2) {
       if (weekendFood > foodTxns.length * 0.5) {
         insights.push({ type: 'food', title: 'Weekend Craver', message: 'You order food mostly on weekends. Try meal-prepping on Sundays to save here!' });
       } else {
-        const potentialSavings = Math.round((totalFoodSpend / foodTxns.length) * 2 * 4); // saving 2 orders a week
+        const potentialSavings = FinancialHealthEngine.calculatePotentialFoodSavings(totalFoodSpend, foodTxns.length);
         insights.push({ type: 'food', title: 'High Frequency', message: `You order food frequently. Reducing this by 2 orders/wk helps you save ₹${potentialSavings || 800}/mo!` });
       }
     }
 
-    // Late night
     if (lateNightOrders > 0) {
       insights.push({ type: 'behavioral', title: 'Late Night Spikes', message: `Your spending spikes after 10 PM. Try keeping a late-night snack box at home!` });
     }
 
-    // Shopping
     if (shoppingTxns.length >= 1) {
-      const shopSpend = shoppingTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const shopSpend = CategorizationEngine.calculateCategorySpend(shoppingTxns, 'Shopping');
       insights.push({ type: 'shopping', title: 'Impulse Spikes', message: `Shopping impulse detected (₹${Math.round(shopSpend)}). Wait 24h before closing checkout to verify if it's a need.` });
     }
 

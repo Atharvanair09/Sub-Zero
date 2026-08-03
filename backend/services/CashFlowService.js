@@ -1,11 +1,16 @@
 const incomeRepository = require('../repositories/IncomeRepository');
 const goalAllocationRepository = require('../repositories/GoalAllocationRepository');
 const budgetRepository = require('../repositories/BudgetRepository');
-const { getCycleIdentifier } = require('../utils/incomeCycleUtils');
 const incomeCycleRepository = require('../repositories/IncomeCycleRepository');
 const transactionRepository = require('../repositories/TransactionRepository');
 const goalRepository = require('../repositories/GoalRepository');
 const notificationRepository = require('../repositories/NotificationRepository');
+
+const DateCycleEngine = require('../domain/engines/DateCycleEngine');
+const IncomeCycleEngine = require('../domain/engines/IncomeCycleEngine');
+const BudgetAllocationEngine = require('../domain/engines/BudgetAllocationEngine');
+const CashFlowEngine = require('../domain/engines/CashFlowEngine');
+const GoalAllocationEngine = require('../domain/engines/GoalAllocationEngine');
 
 class CashFlowService {
   static async getSummary(userId) {
@@ -15,7 +20,7 @@ class CashFlowService {
     let totalAllocations = 0;
     
     for (let src of incomeSources) {
-       const cycleId = getCycleIdentifier(src.frequency, new Date());
+       const cycleId = IncomeCycleEngine.getCycleId(src.frequency, new Date());
        const confirmedCycle = await incomeCycleRepository.findOne({
            incomeSourceId: src._id,
            cycleIdentifier: cycleId,
@@ -31,42 +36,23 @@ class CashFlowService {
        }
        totalIncome += incomeForSource;
        
-       // Allocations
        const allocations = await goalAllocationRepository.findMany({ incomeSourceId: src._id, status: 'active' });
-       for (let alloc of allocations) {
-           if (alloc.allocationType === 'fixed') {
-               totalAllocations += alloc.amountOrPercentage;
-           } else {
-               totalAllocations += (incomeForSource * alloc.amountOrPercentage) / 100;
-           }
-       }
+       totalAllocations += GoalAllocationEngine.calculateTotalAllocatedAmount(allocations, incomeForSource);
     }
 
     const budgets = await budgetRepository.findMany({ userId });
-    let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
+    let budgetReservations = BudgetAllocationEngine.calculateTotalReservations(budgets);
 
-    // Get current month expenses
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const startOfMonth = DateCycleEngine.getStartOfMonth(new Date());
     const txns = await transactionRepository.findMany({ 
       userId, 
       type: 'debit', 
       date: { $gte: startOfMonth } 
     });
-    const totalExpenses = txns.reduce((sum, t) => sum + (t.amount || 0), 0);
-
-    // Calculate budget utilization dynamically
-    let budgetUtilization = [];
-    for (let b of budgets) {
-      const spent = txns.filter(t => t.category === b.category).reduce((s, t) => s + (t.amount || 0), 0);
-      budgetUtilization.push({
-        category: b.category,
-        limit: b.monthlyLimit,
-        spent: spent,
-        percentage: (spent / b.monthlyLimit) * 100
-      });
-    }
-
-    const remainingAvailableIncome = totalIncome - totalAllocations - budgetReservations - totalExpenses;
+    
+    const totalExpenses = CashFlowEngine.calculateTotalExpenses(txns);
+    const budgetUtilization = BudgetAllocationEngine.calculateBudgetUtilization(budgets, txns);
+    const remainingAvailableIncome = CashFlowEngine.calculateRemainingAvailableIncome(totalIncome, totalAllocations, budgetReservations, totalExpenses);
 
     return {
       totalIncome,
@@ -86,10 +72,9 @@ class CashFlowService {
         throw new Error("Transaction or Income Source not found");
     }
 
-    const cycleId = getCycleIdentifier(source.frequency, txn.date || new Date());
+    const cycleId = IncomeCycleEngine.getCycleId(source.frequency, txn.date || new Date());
     console.log(`[Cashflow API] /process-cycle - Triggered for source ${source.name}, transaction ${txn._id}. CycleId: ${cycleId}`);
 
-    // Validation: Ensure this cycle wasn't already processed
     const existingCycle = await incomeCycleRepository.findOne({ 
        incomeSourceId: source._id, 
        cycleIdentifier: cycleId, 
@@ -101,7 +86,6 @@ class CashFlowService {
     }
 
     if (choice === 'ignore') {
-       // Mark notification as read and treat as regular credit
        await notificationRepository.updateMany(
           { transactionId: txn._id, type: { $in: ['income_verification', 'income_detected'] } },
           { $set: { read: true } }
@@ -114,23 +98,18 @@ class CashFlowService {
        actualAmount = source.amount;
     }
 
-    // Calculate total allocations
     const allocations = await goalAllocationRepository.findMany({ incomeSourceId, status: 'active' });
-    let totalAllocations = 0;
+    const totalAllocations = GoalAllocationEngine.calculateTotalAllocatedAmount(allocations, actualAmount);
     
     for (let alloc of allocations) {
-      const amountToAdd = alloc.allocationType === 'fixed' ? alloc.amountOrPercentage : (actualAmount * alloc.amountOrPercentage) / 100;
-      totalAllocations += amountToAdd;
-      
-      // Update actual goal balance
+      const amountToAdd = GoalAllocationEngine.calculateAmountToAdd(alloc, actualAmount);
       await goalRepository.findByIdAndUpdate(alloc.goalId, {
         $inc: { currentAmount: amountToAdd }
       });
     }
 
-    // Get budget reservations
     const budgets = await budgetRepository.findMany({ userId });
-    let budgetReservations = budgets.reduce((sum, b) => sum + b.monthlyLimit, 0);
+    const budgetReservations = BudgetAllocationEngine.calculateTotalReservations(budgets);
 
     const cycle = await incomeCycleRepository.create({
       userId,
@@ -142,12 +121,11 @@ class CashFlowService {
       expectedAmount: source.amount,
       goalAllocations: totalAllocations,
       budgetReservations: budgetReservations,
-      totalExpenses: 0, // at cycle start
+      totalExpenses: 0,
       status: 'processed'
     });
     console.log(`[Cashflow API] /process-cycle - Created and saved IncomeCycle ${cycleId} with actual amount ₹${actualAmount}`);
 
-    // Update the IncomeSource's lastReceivedDate if the transaction is newer
     if (!source.lastReceivedDate || new Date(txn.date) > new Date(source.lastReceivedDate)) {
       await incomeRepository.updateOne({ _id: source._id }, { $set: { lastReceivedDate: txn.date } });
     }

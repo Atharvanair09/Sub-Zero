@@ -1,5 +1,7 @@
 const subscriptionRepository = require('../repositories/SubscriptionRepository');
 const transactionRepository = require('../repositories/TransactionRepository');
+const CategorizationEngine = require('../domain/engines/CategorizationEngine');
+const FinancialHealthEngine = require('../domain/engines/FinancialHealthEngine');
 
 class ChatService {
   static async getChatReply({ message, userId }) {
@@ -10,7 +12,7 @@ class ChatService {
     
     if (msg.includes("save") || msg.includes("savings")) {
       const unusedSubs = subs.filter(s => !s.usedRecently);
-      const totalSavings = unusedSubs.reduce((sum, s) => sum + s.price, 0);
+      const totalSavings = FinancialHealthEngine.calculateUnusedSubscriptionSavings(unusedSubs);
       if(totalSavings > 0) {
         reply = `You have ${unusedSubs.length} unused subscriptions. If you cancel them, you can save ₹${totalSavings} this month!`;
       } else {
@@ -18,7 +20,7 @@ class ChatService {
       }
     } else if (msg.includes("cancel") || msg.includes("waste") || msg.includes("wasting") || msg.includes("where am i wasting")) {
       const txns = await transactionRepository.findMany(userId ? { userId } : {});
-      let foodSpend = txns.filter(t => ['Food', 'Zomato', 'Swiggy'].includes(t.category) || /zomato|swiggy|uber eats/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
+      let foodSpend = CategorizationEngine.calculateCategorySpend(txns, 'Food');
 
       const worstSub = subs.sort((a,b) => b.price - a.price).find(s => !s.usedRecently);
       

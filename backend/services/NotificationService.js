@@ -1,13 +1,14 @@
 const notificationRepository = require('../repositories/NotificationRepository');
 const subscriptionRepository = require('../repositories/SubscriptionRepository');
+const NotificationDecisionEngine = require('../domain/engines/NotificationDecisionEngine');
+const DateCycleEngine = require('../domain/engines/DateCycleEngine');
 
 class NotificationService {
   static async listNotifications(userId) {
     const subs = await subscriptionRepository.findMany({ userId });
     for (const sub of subs) {
-      const daysUntilBilling = Math.ceil((new Date(sub.nextBillingDate) - new Date()) / (1000 * 60 * 60 * 24));
-      
-      if (daysUntilBilling <= 2 && daysUntilBilling > 0) {
+      if (NotificationDecisionEngine.shouldSendRenewalAlert(sub.nextBillingDate)) {
+        const daysUntilBilling = DateCycleEngine.getDaysUntil(sub.nextBillingDate);
         await notificationRepository.findOneAndUpdate(
           { userId, type: 'renewal', subscriptionId: sub._id, read: false },
           { 
@@ -19,7 +20,7 @@ class NotificationService {
         );
       }
 
-      if (sub.usageLogs.length === 0 && (new Date() - new Date(sub.createdAt)) > 15 * 24 * 60 * 60 * 1000) {
+      if (NotificationDecisionEngine.shouldSendUsageAlert(sub.usageLogs, sub.createdAt)) {
         await notificationRepository.findOneAndUpdate(
           { userId, type: 'usage_alert', subscriptionId: sub._id, read: false },
           { 
@@ -31,20 +32,17 @@ class NotificationService {
         );
       }
 
-      // Check for price increases
-      if (sub.priceHistory && sub.priceHistory.length > 1) {
-        const lastPrice = sub.priceHistory[sub.priceHistory.length - 2].price;
-        if (sub.price > lastPrice) {
-          await notificationRepository.findOneAndUpdate(
-            { userId, type: 'price_increase', subscriptionId: sub._id, read: false },
-            { 
-              title: `Price Increase Detected`,
-              message: `The price for ${sub.name} increased from ₹${lastPrice} to ₹${sub.price}.`,
-              priority: 'critical'
-            },
-            { upsert: true }
-          );
-        }
+      if (NotificationDecisionEngine.shouldSendPriceIncreaseAlert(sub.price, sub.priceHistory)) {
+        const lastPrice = NotificationDecisionEngine.getLastPrice(sub.priceHistory);
+        await notificationRepository.findOneAndUpdate(
+          { userId, type: 'price_increase', subscriptionId: sub._id, read: false },
+          { 
+            title: `Price Increase Detected`,
+            message: `The price for ${sub.name} increased from ₹${lastPrice} to ₹${sub.price}.`,
+            priority: 'critical'
+          },
+          { upsert: true }
+        );
       }
     }
 

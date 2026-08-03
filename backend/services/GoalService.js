@@ -1,6 +1,7 @@
 const goalRepository = require('../repositories/GoalRepository');
 const goalAllocationRepository = require('../repositories/GoalAllocationRepository');
 const incomeRepository = require('../repositories/IncomeRepository');
+const GoalAllocationEngine = require('../domain/engines/GoalAllocationEngine');
 
 class GoalService {
   static async listGoals(userId) {
@@ -23,26 +24,11 @@ class GoalService {
       throw new Error("Income source not found");
     }
 
-    // Validate allocation limit
     const existingAllocations = await goalAllocationRepository.findMany({ incomeSourceId, status: 'active' });
     
-    let totalAllocatedAmount = 0;
-    for (let alloc of existingAllocations) {
-      if (alloc.allocationType === 'fixed') {
-        totalAllocatedAmount += alloc.amountOrPercentage;
-      } else {
-        totalAllocatedAmount += (incomeSource.amount * alloc.amountOrPercentage) / 100;
-      }
-    }
+    const isValid = GoalAllocationEngine.validateAllocationLimit(existingAllocations, { allocationType, amountOrPercentage }, incomeSource.amount);
 
-    let newAllocAmount = 0;
-    if (allocationType === 'fixed') {
-      newAllocAmount = amountOrPercentage;
-    } else {
-      newAllocAmount = (incomeSource.amount * amountOrPercentage) / 100;
-    }
-
-    if (totalAllocatedAmount + newAllocAmount > incomeSource.amount) {
+    if (!isValid) {
       const error = new Error("Allocation exceeds total income amount. Please reduce your allocation.");
       error.isValidationError = true;
       throw error;

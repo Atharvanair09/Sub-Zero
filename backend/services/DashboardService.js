@@ -3,63 +3,39 @@ const transactionRepository = require('../repositories/TransactionRepository');
 const notificationRepository = require('../repositories/NotificationRepository');
 const userRepository = require('../repositories/UserRepository');
 
+const FinancialHealthEngine = require('../domain/engines/FinancialHealthEngine');
+const CategorizationEngine = require('../domain/engines/CategorizationEngine');
+const DateCycleEngine = require('../domain/engines/DateCycleEngine');
+const CashFlowEngine = require('../domain/engines/CashFlowEngine');
+
 class DashboardService {
   static async getStats(userId) {
     const subs = await subscriptionRepository.findMany({ userId });
     const user = await userRepository.findById(userId);
     
-    // Get recent transactions to accurately calculate monthly spend
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = DateCycleEngine.getDaysAgo(30);
     const txns = await transactionRepository.findMany({ userId, date: { $gte: thirtyDaysAgo } });
     
-    const subSpend = subs.reduce((sum, s) => sum + (s.billingCycle === 'monthly' ? s.price : s.price / 12), 0);
-    const txnSpend = txns.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const subSpend = CashFlowEngine.calculateMonthlySubscriptionSpend(subs);
+    const txnSpend = CashFlowEngine.calculateTotalExpenses(txns);
     
     const monthlySpend = subSpend + txnSpend;
-    const yearlyProjection = (subSpend * 12) + (txnSpend * 12);
+    const yearlyProjection = CashFlowEngine.calculateYearlyProjection(subSpend, txnSpend);
     
-    // Financial Intelligence
-    const foodSpend = txns.filter(t => ['Food', 'Zomato', 'Swiggy', 'Blinkit', 'Zepto'].includes(t.category) || /zomato|swiggy|uber eats|blinkit|zepto/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
-    const shoppingSpend = txns.filter(t => ['Shopping', 'Amazon', 'Flipkart'].includes(t.category) || /amazon|flipkart|myntra/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
-    const transportSpend = txns.filter(t => ['Transport', 'Uber', 'Ola', 'Rapido'].includes(t.category) || /uber|ola|rapido/i.test(t.name)).reduce((sum, t) => sum + (t.amount || 0), 0);
+    const foodSpend = CategorizationEngine.calculateCategorySpend(txns, 'Food');
+    const shoppingSpend = CategorizationEngine.calculateCategorySpend(txns, 'Shopping');
+    const transportSpend = CategorizationEngine.calculateCategorySpend(txns, 'Transport');
     const subPercent = monthlySpend > 0 ? (subSpend / monthlySpend) * 100 : 0;
     
-    let healthScore = 0;
-    if(subs.length > 0) {
-      let totalScore = 0;
-      subs.forEach(s => {
-        const cycleDays = s.billingCycle === 'monthly' ? 30 : 365;
-        const uniqueDaysUsed = new Set(s.usageLogs.map(log => new Date(log).toISOString().split('T')[0])).size;
-        let itemScore = (uniqueDaysUsed / cycleDays) * 100;
-        if (!s.usedRecently) itemScore -= 30; // penalty
-        if (s.price < 500 && uniqueDaysUsed > 5) itemScore += 20;
-        itemScore = Math.min(Math.max(0, itemScore), 100);
-        if(uniqueDaysUsed === 0 && s.usedRecently) itemScore = 85;
-        totalScore += itemScore;
-      });
-      healthScore = Math.round(totalScore / subs.length);
-    } else {
-      healthScore = 100;
-    }
+    const healthScore = FinancialHealthEngine.calculateTotalHealthScore(subs);
 
-    const categoryData = subs.reduce((acc, s) => {
-      acc[s.category] = (acc[s.category] || 0) + s.price;
-      return acc;
-    }, {});
-
-    // Add transaction categories
-    txns.forEach(t => {
-      let cat = t.category || 'Transaction';
-      if(/zomato|swiggy|uber eats/i.test(t.name)) cat = "Food";
-      categoryData[cat] = (categoryData[cat] || 0) + t.amount;
-    });
+    const categoryData = CategorizationEngine.calculateCategoryBreakdown(subs, txns);
 
     const pieChart = Object.keys(categoryData).map(cat => ({
       name: cat,
       value: categoryData[cat]
     }));
 
-    // Dynamic Recent Activity (Syncing notifications + transactions)
     const recentTxns = await transactionRepository.findMany({ userId }, { sort: { date: -1 }, limit: 5 });
     const recentNotifs = await notificationRepository.findMany({ userId }, { sort: { createdAt: -1 }, limit: 3 });
     
@@ -82,7 +58,7 @@ class DashboardService {
         message: n.message,
         date: n.createdAt,
         subType: n.type,
-        logo: 'https://cdn-icons-png.flaticon.com/512/10433/10433048.png' // Default AI logo
+        logo: 'https://cdn-icons-png.flaticon.com/512/10433/10433048.png'
       }))
     ].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
 
